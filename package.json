@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "e2e": "./e2e/run.sh"
+    "e2e": "./e2e/run.sh",
+    "check:migrations": "node scripts/check-migrations.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",

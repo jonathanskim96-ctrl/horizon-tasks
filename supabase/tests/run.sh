@@ -14,5 +14,7 @@ $PSQL -f auth_shim.sql
 for f in ../migrations/*.sql; do $PSQL -f "$f"; done
 $PSQL -f rls_test.sql
 $PSQL -f attack_test.sql
+sed "s/YOUR_EMAIL_HERE/owner@example.com/" ../recovery/restore_deleted.sql > "$DIR/restore_filled.sql"
+(cd "$DIR" && $PSQL -f "$OLDPWD/recovery_test.sql")
 # App ↔ DB contract test (real payloads from the TypeScript planners).
 (cd ../.. && PGHOST="$DIR" PGPORT=54329 npx vitest run supabase/tests/contract.test.ts)

@@ -127,6 +127,30 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 update public.categories set name = 'pwned', color = '#000000' where id = :'a_cat';
 delete from public.categories where id = :'a_cat';
 
+-- ── Guardrails (0006) ───────────────────────────────────────
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.must_fail($s$ truncate public.tasks cascade $s$, 'TRUNCATE (bypasses RLS)');
+select pg_temp.must_fail($s$ truncate public.completions $s$, 'TRUNCATE history');
+select pg_temp.must_fail($s$ truncate public.categories cascade $s$, 'TRUNCATE categories');
+select pg_temp.must_fail($s$ create table public.junk (x int) $s$, 'create table');
+select pg_temp.must_fail($s$ drop table public.tasks $s$, 'drop table');
+select pg_temp.must_fail($s$ alter table public.tasks disable row level security $s$, 'disable RLS');
+select pg_temp.must_fail($s$ select public.apply_changes(deletes => (select jsonb_agg(gen_random_uuid()) from generate_series(1,201))) $s$, 'mass task delete');
+select pg_temp.must_fail($s$ select public.apply_changes(history_deletes => (select jsonb_agg(gen_random_uuid()) from generate_series(1,2))) $s$, 'mass history delete');
+-- The safety log can't be rewritten, emptied, or read across accounts.
+select pg_temp.must_fail($s$ update public.safety_log set old_row = '{}' $s$, 'edit safety log');
+select pg_temp.must_fail($s$ delete from public.safety_log $s$, 'erase safety log');
+select pg_temp.must_fail($s$ truncate public.safety_log $s$, 'truncate safety log');
+select pg_temp.must_fail($s$ insert into public.safety_log (user_id, table_name, op, row_id, old_row) values ('00000000-0000-0000-0000-00000000000a','tasks','DELETE',gen_random_uuid(),'{}') $s$, 'forge log entry for A');
+do $$ begin
+  assert (select count(*) from public.safety_log where user_id <> '00000000-0000-0000-0000-00000000000b') = 0, 'B reads A safety log';
+end $$;
+reset role;
+set role anon;
+select pg_temp.must_fail($s$ select count(*) from public.safety_log $s$, 'anon reads safety log');
+reset role;
+
 -- ── A's data survived every attack ──────────────────────────
 reset role;
 set role authenticated;
@@ -138,6 +162,7 @@ do $$ begin
   assert (select count(*) from public.categories where name = 'evil') = 0, 'category planted in A';
   assert (select count(*) from public.categories where name = 'A') = 1, 'A category deleted or renamed by B';
   assert (select color from public.categories where name = 'A') = '#112233', 'A category recolored by B';
+  assert (select count(*) from public.tasks) >= 1, 'A tasks wiped';
 end $$;
 reset role;
 \echo ALL ATTACK CHECKS PASSED

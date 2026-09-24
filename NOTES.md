@@ -33,6 +33,7 @@ data, forms, handlers, render or storage.
 
 ## Security (see CLAUDE.md for the standing checklist)
 
+- 0006_guardrails: least privilege, safety_log, mass-delete caps.
 - 0005_realtime: tasks/categories/completions in the realtime publication.
 - 0004_stale_write_guard: apply_changes rejects stale deletes/updates atomically.
 - 0003_limits_and_shapes: size limits agree with the client, checklist shape
@@ -156,6 +157,22 @@ Now: workbox skipWaiting + clientsClaim; src/sw-register.ts reloads if the
 takeover happens within 10 s of opening, otherwise shows a "Reload" banner;
 updates are checked on every return to the app. The footer shows the build
 (commit) id. e2e/update.mjs tests both paths with two real builds.
+
+### Data-safety guardrails (2026-09-24)
+Found: app roles held TRUNCATE (ignores RLS — one statement could wipe every
+user's rows). Added, in layers:
+- DB (0006): TRUNCATE/REFERENCES/TRIGGER revoked; no CREATE on schema;
+  append-only `safety_log` (old row captured before every UPDATE/DELETE on
+  tasks/completions/categories, incl. cascades; app can't edit/erase it);
+  apply_changes caps: ≤200 task deletes, ≤1 history delete per call.
+- CI: `scripts/check-migrations.mjs` (applied migrations immutable via
+  append-only lock; destructive SQL needs an owner-approved marker); deploy
+  now requires verify (guardrail + typecheck + lint + unit + DB tests).
+- Code: `scripts/guardrails.test.ts` pins the exact set of DB write paths.
+- Process: CLAUDE.md "Data safety" rules; docs/RECOVERY.md (tested SQL).
+- Tests: attack suite (truncate, DDL, mass deletes, log tampering), recovery
+  test (delete tree + history + category + overwrite → fully restored);
+  mutation-verified.
 
 ### Known gaps
 None from the spec. Possible later polish: category reordering, notifications.

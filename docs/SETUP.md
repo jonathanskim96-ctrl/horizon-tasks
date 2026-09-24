@@ -86,6 +86,12 @@ It creates the four tables the app uses and the security rules that keep them pr
    `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0005_realtime.sql`
    (turns on instant sync between your devices). → **Run query** → "Success. No rows returned."
 
+12. **And the sixth file**, the same way:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0006_guardrails.sql`
+   (data-safety guardrails: an undeletable safety log of every change, no
+   table-wiping commands, caps on mass deletion — see `docs/RECOVERY.md`).
+   Same warning → **Run query** → "Success. No rows returned."
+
 Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 

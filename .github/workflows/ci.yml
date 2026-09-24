@@ -9,11 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the migration guardrail compares with the previous commit
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Migration guardrail (applied migrations immutable, no unapproved destructive SQL)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-migrations.mjs
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
