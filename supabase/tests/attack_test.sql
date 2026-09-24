@@ -42,7 +42,9 @@ select pg_temp.must_fail($s$ insert into public.completions (user_id, task_id, o
 select pg_temp.must_fail($s$ insert into public.categories (user_id, name, color) values ('00000000-0000-0000-0000-00000000000a','evil','#000000') $s$, 'B inserts category as A');
 
 -- Silent no-ops must really be no-ops (checked as A below).
-select public.apply_changes(deletes => '["a0000000-0000-0000-0000-000000000001"]', history_deletes => '["a0000000-0000-0000-0000-0000000000c1"]');
+-- Since 0004 these fail loudly (B can't see A's rows, so they count as "already gone").
+select pg_temp.must_fail($s$ select public.apply_changes(deletes => '["a0000000-0000-0000-0000-000000000001"]') $s$, 'B deletes A task via RPC');
+select pg_temp.must_fail($s$ select public.apply_changes(history_deletes => '["a0000000-0000-0000-0000-0000000000c1"]') $s$, 'B deletes A history via RPC');
 update public.tasks set title = 'pwned' where id = 'a0000000-0000-0000-0000-000000000001';
 delete from public.tasks where id = 'a0000000-0000-0000-0000-000000000001';
 delete from public.completions where id = 'a0000000-0000-0000-0000-0000000000c1';
@@ -97,6 +99,28 @@ select pg_temp.must_fail($s$ select count(*) from public.completions $s$, 'anon 
 select pg_temp.must_fail($s$ select count(*) from public.profiles $s$, 'anon reads profiles');
 select pg_temp.must_fail($s$ insert into public.tasks (title) values ('x') $s$, 'anon inserts');
 select pg_temp.must_fail($s$ select public.is_valid_checklist('[]') $s$, 'anon calls helper');
+
+-- ── Stale second-device writes are rejected atomically (0004) ──
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select public.apply_changes(inserts => jsonb_build_array(jsonb_build_object('id','b0000000-0000-0000-0000-000000000001','title','Twice','priority',1,
+  'category_id',(select id from public.categories where name='B'),'due_date','2026-01-01')));
+-- Device 1 completes it (history + delete).
+select public.apply_changes(
+  completions => '[{"id":"b0000000-0000-0000-0000-0000000000c1","task_id":"b0000000-0000-0000-0000-000000000001","outcome":"completed","snapshot":{"title":"Twice"}}]',
+  deletes => '["b0000000-0000-0000-0000-000000000001"]');
+-- Device 2 (stale) completes it again and spawns a next occurrence: must fail as a whole.
+select pg_temp.must_fail($s$ select public.apply_changes(
+  completions => '[{"id":"b0000000-0000-0000-0000-0000000000c2","task_id":"b0000000-0000-0000-0000-000000000001","outcome":"completed","snapshot":{"title":"Twice"}}]',
+  deletes => '["b0000000-0000-0000-0000-000000000001"]',
+  inserts => jsonb_build_array(jsonb_build_object('title','Twice next','priority',1,'category_id',(select id from public.categories where name='B'),'due_date','2026-01-08'))) $s$, 'stale double complete');
+select pg_temp.must_fail($s$ select public.apply_changes(history_deletes => '["b0000000-0000-0000-0000-0000000000c9"]') $s$, 'stale history delete');
+select pg_temp.must_fail($s$ select public.apply_changes(updates => '[{"id":"b0000000-0000-0000-0000-000000000001","title":"x","priority":1,"category_id":"00000000-0000-0000-0000-000000000000"}]') $s$, 'stale edit');
+do $$ begin
+  assert (select count(*) from public.completions where snapshot->>'title' = 'Twice') = 1, 'stale complete recorded twice';
+  assert (select count(*) from public.tasks where title = 'Twice next') = 0, 'stale complete spawned occurrence';
+end $$;
 
 -- ── A's data survived every attack ──────────────────────────
 reset role;

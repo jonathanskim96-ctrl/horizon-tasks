@@ -488,6 +488,47 @@ await scenario('App icons and manifest are served', async ({ page }) => {
   }
 })
 
+await scenario('Two devices: completing the same task twice records it once', async ({ page, mock, ctx }) => {
+  mock.seed([{ id: U(1), title: 'Weekly review', due_date: iso(1), recurrence_every_n_days: 7 }])
+  await boot(page)
+  const laptop = await ctx.newPage()
+  await laptop.route('http://mock.supabase.local/**', mock.handler)
+  await laptop.goto(BASE)
+  await laptop.getByText('Due today', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Complete “Weekly review”' }).first().click()
+  await page.getByText(/Completed — next due/).waitFor()
+  await laptop.getByRole('button', { name: 'Complete “Weekly review”' }).first().click()
+  await laptop.getByText('already changed on another device').waitFor()
+  if (mock.db.completions.length !== 1 || mock.db.tasks.length !== 1) throw new Error(`history ${mock.db.completions.length}, tasks ${mock.db.tasks.length}`)
+  // The laptop refreshed itself: the stale occurrence is gone from its screen.
+  await laptop.waitForFunction((d) => ![...document.querySelectorAll('.task-row')].some((r) => r.textContent.includes(d)), iso(1))
+  await laptop.getByRole('button', { name: 'Later' }).click()
+  await laptop.getByRole('button', { name: 'Monthly' }).click()
+  await laptop.locator('.task-row', { hasText: iso(8) }).first().waitFor()
+})
+
+await scenario('Sign out clears the session from the device', async ({ page }) => {
+  await boot(page)
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { name: 'Sign in with Google' }).waitFor()
+  const keys = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('sb-') && localStorage.getItem(k)?.includes('access_token')))
+  if (keys.length) throw new Error('token left behind: ' + keys)
+  if (await page.getByText('Due today').count()) throw new Error('data still visible')
+})
+
+await scenario('Offline: clear banner, plain-English errors, recovers when back online', async ({ page, mock, ctx }) => {
+  await boot(page)
+  await newTask(page, { title: 'Net test' })
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await ctx.setOffline(true)
+  await page.getByText("You're offline").waitFor()
+  mock.faults.abortWrite = 1
+  await page.getByRole('button', { name: 'Complete “Net test”' }).first().click()
+  await page.getByText("Can't reach the server — you may be offline.").waitFor()
+  await ctx.setOffline(false)
+  await page.waitForFunction(() => !document.querySelector('.offline-banner'))
+})
+
 await browser.close()
 for (const r of results) console.log(r.join('  '))
 const passed = results.filter((r) => r[0] === 'PASS').length

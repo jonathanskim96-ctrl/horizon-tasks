@@ -19,6 +19,11 @@ export function createMock() {
       if (faults.abortWrite) { faults.abortWrite--; return route.abort('failed') }
       if (faults.failWrite) { faults.failWrite--; return json({ message: 'simulated server error' }, 500) }
       await new Promise((r) => setTimeout(r, 150)) // realistic latency so double-taps overlap
+      // Mirror 0004: stale deletes/updates fail the whole batch.
+      const stale = body.deletes.some((id) => !db.tasks.some((t) => t.id === id)) ||
+        body.updates.some((u) => !db.tasks.some((t) => t.id === u.id)) ||
+        body.history_deletes.some((id) => !db.completions.some((c) => c.id === id))
+      if (stale) return json({ message: 'stale: this task was already changed on another device' }, 400)
       for (const c of body.completions) db.completions.push({ ...c })
       const del = new Set(body.deletes)
       let grew = true

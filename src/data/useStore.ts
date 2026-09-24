@@ -61,11 +61,20 @@ export function useStore() {
   const commit = useCallback(
     (key: string, cs: ChangeSet) =>
       guardedWrite(key, async () => {
-        await applyChanges(cs)
+        try {
+          await applyChanges(cs)
+        } catch (e) {
+          // Another device got there first: nothing was written; show the latest.
+          if ((e as Error).message.includes('stale:')) {
+            void reload()
+            throw new Error('That was already changed on another device — showing the latest now.')
+          }
+          throw e
+        }
         writes.current++
         setData((d) => (d ? applyLocal(d, cs) : d))
       }),
-    [],
+    [reload],
   )
 
   const addCategory = useCallback(

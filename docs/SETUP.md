@@ -78,6 +78,11 @@ It creates the four tables the app uses and the security rules that keep them pr
    the same warning (it replaces a function and two limits) → **Run query** →
    "Success. No rows returned."
 
+10. **And the fourth file**, the same way:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0004_stale_write_guard.sql`
+   (stops a task completed on two devices from being recorded twice). Same
+   warning → **Run query** → "Success. No rows returned."
+
 Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 

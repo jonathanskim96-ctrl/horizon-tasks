@@ -33,6 +33,7 @@ data, forms, handlers, render or storage.
 
 ## Security (see CLAUDE.md for the standing checklist)
 
+- 0004_stale_write_guard: apply_changes rejects stale deletes/updates atomically.
 - 0003_limits_and_shapes: size limits agree with the client, checklist shape
   constraint, apply_changes batch caps.
 - 0002_hardening: `anon` has no table/function access; history has no UPDATE
@@ -87,11 +88,35 @@ Found and fixed:
 - Verified: CSP doesn't block category colors; unit tests pass in 4 timezones
   (incl. UTC+14 / UTC−11); app updates never force-reload mid-edit.
 
-### Known gaps (not built yet, by plan)
-Overdue popup (incl. "Not needed"/skip), History tab (restore, permanent delete,
-export), Weekly/Monthly/Later tabs, Quick Add + FAB menu, import from the
-artifact, category edit/delete, moving a task to another parent, live realtime
-sync (currently refresh-on-focus), offline editing, PNG app icons for iOS.
+### Session 3: full build + two review passes
+
+Built: Weekly (list/week calendar), Monthly (30-day list/month calendar),
+Later, History (restore, confirmed permanent delete, JSON/CSV export),
+overdue popup (once per app open; Dismiss / Not needed / Complete; inline
+cascade confirm; header pill reopens), Quick Add via the + menu (atomic,
+all-or-nothing, resets), import from the v4 artifact or our own export
+(preview first, idempotent, atomic), PNG/maskable/apple-touch icons,
+60-second background sync while visible, offline banner.
+
+Pass 1 (code-level: line review, property-based fuzzing, parser fuzzing,
+DB contract) fixed: restore breaking the subtask-date rule; stale
+history-delete sheet; misleading import error; lossy re-import of own export;
+string-sorted history.
+
+Pass 2 (black-box: two devices, 1000+1000 load, 320px, accessibility,
+offline, published-bundle inspection) fixed: **completing the same task on
+two devices recorded it twice and spawned two next occurrences** → migration
+0004 makes apply_changes fail atomically when a task/history entry to delete
+or update is already gone, and the app refreshes with a clear message;
+technical offline errors → plain English + offline banner; faint/danger text
+contrast raised to WCAG AA.
+
+Documented behaviour (open question): a *recurring subtask*'s next occurrence
+keeps its parent even when it lands after the parent's due date.
+
+### Known gaps
+Category rename/recolor/delete, moving a task under a different parent,
+instant (realtime) sync (currently on focus + every 60 s), offline editing.
 
 ## Design discipline (each was a real bug before)
 
@@ -158,3 +183,4 @@ sync (currently refresh-on-focus), offline editing, PNG app icons for iOS.
 - 2026-09-24 — Session 2: Dashboard, Daily, Forever, task form, detail, complete/delete flows.
 - 2026-09-24 — Session 2b: test + security pass (contract, attack, mutation, browser suites), 0003, CSP.
 - 2026-09-24 — Session 2c: second verification pass; 5 more fixes, suites extended (20 e2e, 60+ attack checks).
+- 2026-09-24 — Session 3: full feature build; review pass 1 (code) + pass 2 (black-box); 0004.

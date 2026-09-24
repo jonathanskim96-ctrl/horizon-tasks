@@ -92,6 +92,23 @@ export function Main({ email }: { email: string }) {
     if (data.tasks.some((t) => isOverdue(t, today))) setSheet((s) => s ?? { kind: 'overdue' })
   }
 
+  // Offline banner; coming back online refreshes automatically.
+  const [online, setOnline] = useState(() => navigator.onLine)
+  const { reload } = store
+  useEffect(() => {
+    const up = () => {
+      setOnline(true)
+      void reload()
+    }
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [reload])
+
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 2600)
@@ -262,6 +279,7 @@ export function Main({ email }: { email: string }) {
         ))}
       </nav>
 
+      {!online && <div className="offline-banner" role="status">You're offline — you can look around, but changes can't be saved until you reconnect.</div>}
       {store.loadError && <ErrorBanner message={`Sync problem: ${store.loadError}`} onRetry={store.reload} />}
       {actionError && !sheet && (
         <div className="error" role="alert">

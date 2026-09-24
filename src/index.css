@@ -7,14 +7,14 @@
   --border: #2d3138;
   --text: #eef0f3;
   --muted: #9ba1ab;
-  --faint: #6b7078;
+  --faint: #8a9099;
   --accent: #5b8cff;
   --accent-dim: #33436f;
   --overdue: #f2734a;
   --overdue-dim: #4a2f22;
   --good: #4caf7d;
-  --danger: #e5586b;
-  --danger-bg: #4a2a30;
+  --danger: #f07082;
+  --danger-bg: #3a2126;
   --radius: 14px;
   --radius-sm: 9px;
   font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -188,3 +188,5 @@ button.link { background: none; border: 0; color: var(--accent); padding: 0 4px;
 .import-preview ul { margin: 6px 0; padding-left: 18px; }
 .import-preview summary { cursor: pointer; color: var(--muted); }
 input[type=file] { margin: 10px 0; color: var(--muted); max-width: 100%; }
+
+.offline-banner { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius-sm); padding: 10px 12px; margin: 6px 0; font-size: 13px; }

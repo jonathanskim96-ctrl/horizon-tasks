@@ -9,9 +9,16 @@ function db() {
   return supabase
 }
 
+/** Browsers word "no network" differently; say it plainly. */
+export function friendlyError(message: string): string {
+  return /Failed to fetch|NetworkError|Load failed|network connection was lost|internet connection appears to be offline/i.test(message)
+    ? "Can't reach the server — you may be offline."
+    : message
+}
+
 /** Throws a readable Error for any Supabase error — never swallow. */
 function check<T>(res: { data: T | null; error: { message: string } | null }, what: string): NonNullable<T> {
-  if (res.error) throw new Error(`${what} failed: ${res.error.message}`)
+  if (res.error) throw new Error(`${what} failed: ${friendlyError(res.error.message)}`)
   if (res.data == null) throw new Error(`${what} failed: no data returned`)
   return res.data as NonNullable<T>
 }
@@ -45,5 +52,5 @@ export async function seedStarterCategories(): Promise<boolean> {
 export async function applyChanges(cs: ChangeSet): Promise<void> {
   const { error } = await db().rpc('apply_changes', changeSetToArgs(cs))
   // apply_changes returns void, so check the error only.
-  if (error) throw new Error(`Saving failed: ${error.message}`)
+  if (error) throw new Error(`Saving failed: ${friendlyError(error.message)}`)
 }
