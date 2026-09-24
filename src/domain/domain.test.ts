@@ -263,6 +263,19 @@ describe('local state', () => {
   })
 })
 
+describe('applyLocal idempotency', () => {
+  it('re-applying the same change set changes nothing', () => {
+    const tasks = [mk({ id: 'p' }), mk({ id: 'c', parentId: 'p', depth: 1 })]
+    const s0 = { tasks, categories: cats, completions: [] }
+    const cs = planFinish(tasks, cats, 'p', 'completed', env)
+    const once = applyLocal(s0, cs)
+    expect(applyLocal(once, cs)).toEqual(once)
+    const create = planCreate({ title: 'n', notes: '', priority: 1, categoryId: 'c1', ongoing: false, dueDate: TODAY, checklist: [], parentId: null, depth: 0, recurrence: null }, env)
+    const a = applyLocal(once, create)
+    expect(applyLocal(a, create).tasks).toHaveLength(a.tasks.length)
+  })
+})
+
 describe('categories', () => {
   it('assigns unused palette colors, then cycles', () => {
     expect(nextCategoryColor([])).toBe(PALETTE[0])

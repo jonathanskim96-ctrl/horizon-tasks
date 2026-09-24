@@ -122,6 +122,11 @@ do $$ begin
   assert (select count(*) from public.tasks where title = 'Twice next') = 0, 'stale complete spawned occurrence';
 end $$;
 
+-- ── Category tampering across accounts (rename/recolor/delete) ──
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+update public.categories set name = 'pwned', color = '#000000' where id = :'a_cat';
+delete from public.categories where id = :'a_cat';
+
 -- ── A's data survived every attack ──────────────────────────
 reset role;
 set role authenticated;
@@ -131,7 +136,8 @@ do $$ begin
   assert (select count(*) from public.completions where id = 'a0000000-0000-0000-0000-0000000000c1') = 1, 'A history deleted';
   assert (select starter_seeded_at from public.profiles) is not null, 'A profile changed';
   assert (select count(*) from public.categories where name = 'evil') = 0, 'category planted in A';
-  assert (select count(*) from public.categories where name = 'A') = 1, 'A category deleted by B';
+  assert (select count(*) from public.categories where name = 'A') = 1, 'A category deleted or renamed by B';
+  assert (select color from public.categories where name = 'A') = '#112233', 'A category recolored by B';
 end $$;
 reset role;
 \echo ALL ATTACK CHECKS PASSED

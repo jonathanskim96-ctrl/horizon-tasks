@@ -86,24 +86,30 @@ export function useStore(userId: string) {
     flushing.current = true
     const problems: string[] = []
     let needsReload = false
+    let retry = false
     try {
       while (outboxRef.current.length) {
-        const [item, ...rest] = outboxRef.current
+        const item = outboxRef.current[0]
+        // Always edit the *current* queue by id: new offline changes may be
+        // appended while a send is in flight, and must never be dropped.
+        const without = () => outboxRef.current.filter((i) => i.id !== item.id)
         try {
           await applyChanges(item.cs)
           writes.current++
           setServer((d) => (d ? applyLocal(d, item.cs) : d))
-          setQueue(rest)
+          setQueue(without())
         } catch (e) {
           const message = (e as Error).message
           const outcome = classifyReplayError(message, item.uncertain)
           if (outcome === 'offline') {
-            setQueue([{ ...item, uncertain: true }, ...rest]) // outcome unknown now
+            setQueue(outboxRef.current.map((i) => (i.id === item.id ? { ...i, uncertain: true } : i)))
+            retry = true
             break
           }
-          if (outcome === 'rejected') problems.push(`Couldn't sync “${item.label}”: ${message.replace(/^Saving failed: /, '').replace(/^stale: /, '')}`)
+          if (outcome === 'rejected')
+            problems.push(`Couldn't sync “${item.label}”: ${message.replace(/^Saving failed: /, '').replace(/^stale: /, '')}`)
           needsReload = true
-          setQueue(rest)
+          setQueue(without())
         }
       }
     } finally {
@@ -111,7 +117,13 @@ export function useStore(userId: string) {
     }
     if (problems.length) setSyncProblems((p) => [...p, ...problems])
     if (needsReload) await reload()
+    // Connection flaky but "online": try again soon rather than waiting.
+    if (retry) window.setTimeout(() => void flushRef.current(), 10_000)
   }, [reload, setQueue])
+  const flushRef = useRef(flush)
+  useEffect(() => {
+    flushRef.current = flush
+  }, [flush])
 
   useEffect(() => {
     let cancelled = false
@@ -189,6 +201,7 @@ export function useStore(userId: string) {
       guardedWrite(key, async () => {
         if (outboxRef.current.length || !navigator.onLine) {
           enqueue(key, cs, false)
+          if (navigator.onLine) void flush()
           return 'queued'
         }
         try {
@@ -201,6 +214,7 @@ export function useStore(userId: string) {
           }
           if (isNetworkError(message)) {
             enqueue(key, cs, true) // the request may or may not have landed
+            window.setTimeout(() => void flushRef.current(), 10_000)
             return 'queued'
           }
           throw e
@@ -209,7 +223,7 @@ export function useStore(userId: string) {
         setServer((d) => (d ? applyLocal(d, cs) : d))
         return 'saved'
       }),
-    [reload, enqueue],
+    [reload, enqueue, flush],
   )
 
   const requireOnline = (what: string, allowQueued = false) => {

@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { applyLocal, planCreate, planCreateMany, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist, planUpdate, type Env } from '../../src/domain/actions'
+import { applyLocal, planCreate, planCreateMany, planDelete, planDeleteHistory, planFinish, planReassignCategory, planRestore, planToggleChecklist, planUpdate, type Env } from '../../src/domain/actions'
 import { toExportJSON } from '../../src/domain/exporting'
 import { missingCategories, parseImport, planImport } from '../../src/domain/importing'
 import { validateQuickAdd } from '../../src/domain/validate'
@@ -194,5 +194,44 @@ describe.skipIf(!enabled)('app ↔ database contract', () => {
     // Importing the same file again adds nothing.
     const again = planImport(parsed, { tasks: plan.changeSet.inserts, categories: otherCats, completions: plan.changeSet.completions }, env)
     expect(again.counts.tasks + again.counts.completions).toBe(0)
+  })
+
+  it('moves subtrees, recurs subtasks to top level, reassigns + deletes categories', () => {
+    let local = readBack()
+    const [catA, catB] = local.categories
+    const apply = (cs: ChangeSet) => {
+      rpc(cs)
+      local = applyLocal(local, cs)
+      expectSame(readBack(), local)
+    }
+    const create = (input: Parameters<typeof validateTask>[0]) => {
+      const r = validateTask(input, { categories: local.categories, tasks: local.tasks })
+      if (!r.ok) throw new Error(JSON.stringify(r.errors))
+      const cs = planCreate(r.value, env)
+      apply(cs)
+      return cs.inserts[0]
+    }
+    const home = create({ title: 'Home', priority: 3, categoryId: catA.id, dueDate: '2026-12-31' })
+    const mid = create({ title: 'Mid', priority: 3, categoryId: catB.id, dueDate: '2026-12-01' })
+    const leaf = create({ title: 'Leaf', priority: 3, categoryId: catB.id, dueDate: '2026-11-01', parentId: mid.id })
+    // Move Mid (with Leaf) under Home: depths shift parent-first, trigger accepts.
+    const v = validateTask({ ...mid, parentId: home.id }, { categories: local.categories, tasks: local.tasks, selfId: mid.id })
+    if (!v.ok) throw new Error(JSON.stringify(v.errors))
+    apply(planUpdate(local.tasks.find((t) => t.id === mid.id)!, v.value, local.tasks))
+    expect(local.tasks.find((t) => t.id === leaf.id)!.depth).toBe(2)
+    // Recurring subtask whose next occurrence passes its parent → top level.
+    const rec = create({ title: 'Rec', priority: 1, categoryId: catA.id, dueDate: '2026-11-28', parentId: mid.id, recurrence: { everyNDays: 7 } })
+    apply(planFinish(local.tasks, local.categories, rec.id, 'completed', env))
+    expect(local.tasks.find((t) => t.title === 'Rec')).toMatchObject({ parentId: null, depth: 0, dueDate: '2026-12-05' })
+    // Deleting a category in use is refused by the database…
+    expect(() => asUser(`delete from public.categories where id = '${catB.id}';`)).toThrow(/foreign key/)
+    // …so the app reassigns first, then deletes.
+    apply(planReassignCategory(local.tasks, catB.id, catA.id))
+    asUser(`delete from public.categories where id = '${catB.id}';`)
+    expect(Number(asUser(`select count(*) from public.categories where id = '${catB.id}';`))).toBe(0)
+    // Rename/recolor goes through RLS as the owner.
+    asUser(`update public.categories set name = 'Renamed', color = '#d6688f' where id = '${catA.id}';`)
+    expect(asUser(`select name || color from public.categories where id = '${catA.id}';`)).toBe('Renamed#d6688f')
+    expect(() => asUser(`update public.categories set color = 'red' where id = '${catA.id}';`)).toThrow(/check constraint/)
   })
 })

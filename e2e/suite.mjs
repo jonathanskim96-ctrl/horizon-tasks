@@ -695,6 +695,23 @@ await scenario('Cold start offline: app opens from cache with queued changes, th
   if (!mock.db.tasks.some((t) => t.title === 'Queued before closing')) throw new Error('not synced')
 }, { serviceWorker: true })
 
+await scenario('A change made while offline changes are still syncing is never lost', async ({ page, mock, ctx }) => {
+  await boot(page)
+  mock.faults.offline = true
+  await ctx.setOffline(true)
+  await newTask(page, { title: 'Queued A' })
+  await page.getByText('1 to sync').waitFor()
+  mock.faults.offline = false
+  mock.faults.slowMs = 2500 // server is slow: sync of A is in flight…
+  await ctx.setOffline(false)
+  await page.waitForTimeout(400)
+  await newTask(page, { title: 'Added during sync B' }) // …while this is added
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await page.waitForFunction(() => !document.querySelector('.pending-chip'), null, { timeout: 20000 })
+  const titles = mock.db.tasks.map((t) => t.title).sort()
+  if (titles.join() !== 'Added during sync B,Queued A') throw new Error('lost a change: ' + titles)
+})
+
 await browser.close()
 for (const r of results) console.log(r.join('  '))
 const passed = results.filter((r) => r[0] === 'PASS').length

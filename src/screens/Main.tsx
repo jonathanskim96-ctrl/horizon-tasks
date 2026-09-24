@@ -210,8 +210,8 @@ export function Main({ email, userId }: { email: string; userId: string }) {
   /** Sign out and wipe this user's cached data from the device. */
   const doSignOut = async () => {
     try {
+      await signOut() // first: if this fails (e.g. offline), keep the device copy
       await store.clearDevice()
-      await signOut()
     } catch (e) {
       setActionError((e as Error).message)
     }

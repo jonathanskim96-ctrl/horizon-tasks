@@ -1,7 +1,7 @@
 // Tiny in-memory stand-in for Supabase (PostgREST + RPCs) with fault injection.
 export function createMock() {
   const db = { categories: [], tasks: [], completions: [] }
-  const faults = { failLoad: 0, failWrite: 0, abortWrite: 0, offline: false }
+  const faults = { failLoad: 0, failWrite: 0, abortWrite: 0, offline: false, slowMs: 0 }
   const calls = { apply: 0 }
   let n = 0
   const id = () => `00000000-0000-0000-0000-${String(++n).padStart(12, '0')}`
@@ -19,7 +19,7 @@ export function createMock() {
       calls.apply++
       if (faults.abortWrite) { faults.abortWrite--; return route.abort('failed') }
       if (faults.failWrite) { faults.failWrite--; return json({ message: 'simulated server error' }, 500) }
-      await new Promise((r) => setTimeout(r, 150)) // realistic latency so double-taps overlap
+      await new Promise((r) => setTimeout(r, 150 + faults.slowMs)) // realistic latency so double-taps overlap
       // Mirror 0004: stale deletes/updates fail the whole batch.
       const stale = body.deletes.some((id) => !db.tasks.some((t) => t.id === id)) ||
         body.updates.some((u) => !db.tasks.some((t) => t.id === u.id)) ||

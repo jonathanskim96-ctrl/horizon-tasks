@@ -247,9 +247,13 @@ export function applyLocal(s: Snapshot, cs: ChangeSet): Snapshot {
   const gone = new Set(cs.deletes)
   const updated = new Map(cs.updates.map((t) => [t.id, t]))
   const historyGone = new Set(cs.historyDeletes)
+  // Idempotent: re-applying a change that's already reflected (e.g. an
+  // offline change the server applied before its reply was lost) is a no-op.
+  const inserted = new Set(cs.inserts.map((t) => t.id))
+  const logged = new Set(cs.completions.map((c) => c.id))
   return {
     ...s,
-    tasks: [...s.tasks.filter((t) => !gone.has(t.id)).map((t) => updated.get(t.id) ?? t), ...cs.inserts],
-    completions: [...cs.completions, ...s.completions].filter((c) => !historyGone.has(c.id)),
+    tasks: [...s.tasks.filter((t) => !gone.has(t.id) && !inserted.has(t.id)).map((t) => updated.get(t.id) ?? t), ...cs.inserts],
+    completions: [...cs.completions, ...s.completions.filter((c) => !logged.has(c.id))].filter((c) => !historyGone.has(c.id)),
   }
 }

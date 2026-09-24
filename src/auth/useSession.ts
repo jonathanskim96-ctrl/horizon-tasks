@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../data/supabase'
+import { friendlyError } from '../data/api'
 
 /**
  * A failed/cancelled Google sign-in comes back as ?error=…&error_description=…
@@ -52,6 +53,7 @@ export async function signInWithGoogle() {
 
 export async function signOut() {
   if (!supabase) return
-  const { error } = await supabase.auth.signOut()
-  if (error) throw new Error(`Sign-out failed: ${error.message}`)
+  // 'local': sign out this device only (your phone stays signed in).
+  const { error } = await supabase.auth.signOut({ scope: 'local' })
+  if (error) throw new Error(`Sign-out failed: ${friendlyError(error.message)}`)
 }
