@@ -158,7 +158,7 @@ npm run dev                  # open http://localhost:5173
 
 | Symptom | Fix |
 |---|---|
-| Google: **"Ineligible accounts not added"** when adding a test user | Click your profile picture (top-right) to see the account's exact email, and enter that (often the no-dots spelling). If it still fails, skip the list: **Audience → Publish app**. That's safe for basic name/email sign-in, but then do Part 7 immediately after your first sign-in, because Supabase's sign-up switch becomes the lock. |
+| Google: **"Ineligible accounts not added"** when adding a test user | Click your profile picture (top-right) to see the account's exact email, and enter that (often the no-dots spelling). If it still fails, skip the list: **Audience → Publish app**. That's safe for basic name/email sign-in, but then do Part 7 immediately after your first sign-in, because Supabase's sign-up switch becomes the lock. If **Publish app** is greyed out ("complete your configuration on the Branding page"), fill in Branding → App domain: home page `https://jonathanskim96-ctrl.github.io/horizon-tasks/`, privacy policy `https://jonathanskim96-ctrl.github.io/horizon-tasks/privacy.html`, authorized domain `jonathanskim96-ctrl.github.io`, and don't upload a logo (a logo triggers Google's review). |
 | Deploy run fails at "Check config" | The two repository **variables** are missing or misnamed. Add them under the Variables tab (Part 5.2), not Secrets. |
 | Deploy fails with "Pages not enabled" / 404 | Part 5.1: set Source to **GitHub Actions**, then rerun the workflow. |
 | Google says **redirect_uri_mismatch** | The Google redirect URI must exactly equal Supabase's Callback URL. |
