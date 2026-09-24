@@ -8,15 +8,15 @@ const iso = (k = 0) => { const d = new Date(); d.setDate(d.getDate() + k); retur
 const results = []
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
 
-async function scenario(name, fn) {
+async function scenario(name, fn, { signedOut = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' })
   const page = await ctx.newPage()
   const mock = createMock()
   const errors = []
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => !/surprise failure/.test(e.message) && errors.push(e.message))
   page.on('console', (m) => m.type() === 'error' && !/Content Security Policy|Failed to load resource/.test(m.text()) && errors.push(m.text()))
   await page.route('http://mock.supabase.local/**', mock.handler)
-  await page.addInitScript((s) => { try { localStorage.setItem('sb-mock-auth-token', s) } catch {} }, session('11111111-1111-1111-1111-111111111111'))
+  if (!signedOut) await page.addInitScript((s) => { try { localStorage.setItem('sb-mock-auth-token', s) } catch {} }, session('11111111-1111-1111-1111-111111111111'))
   try {
     await fn({ page, mock, ctx })
     if (errors.length) throw new Error('page errors: ' + errors.join(' | '))
@@ -248,6 +248,55 @@ await scenario('Delete asks first and cascades', async ({ page, mock }) => {
   await page.getByRole('button', { name: 'Delete' }).last().click()
   await page.getByText('Deleted.', { exact: true }).waitFor()
   if (mock.db.tasks.length !== 0 || mock.db.completions.length !== 0) throw new Error('bad cascade')
+})
+
+await scenario('Checklist: a fast double tap is never silently dropped', async ({ page, mock }) => {
+  await boot(page)
+  await newTask(page, { title: 'Box', check: 'item' })
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await row(page, 'Box').click()
+  const box = page.locator('.checklist-view input')
+  await box.click()
+  await box.click({ force: true })
+  if (!(await box.isDisabled())) throw new Error('not locked during save')
+  await page.locator('.checklist-view input:checked:enabled').waitFor()
+  await box.click()
+  await page.locator('.checklist-view input:not(:checked):enabled').waitFor()
+  await page.waitForTimeout(300)
+  if (mock.db.tasks[0].checklist[0].done !== false || mock.calls.apply !== 3) throw new Error(`db ${JSON.stringify(mock.db.tasks[0].checklist)} calls ${mock.calls.apply}`)
+})
+
+await scenario('Task removed on another device closes its open sheet', async ({ page, mock }) => {
+  await boot(page)
+  await newTask(page, { title: 'Elsewhere' })
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await row(page, 'Elsewhere').click()
+  mock.db.tasks = [] // completed on the phone
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await page.getByText('That task was changed on another device.').waitFor()
+  if (await dlg(page).count()) throw new Error('sheet still open')
+})
+
+await scenario('Failed Google sign-in shows its reason and cleans the URL', async ({ page }) => {
+  await page.goto(BASE + '?error=access_denied&error_description=User+cancelled+%3Cb%3Ex%3C%2Fb%3E')
+  await page.getByText('Sign-in failed: User cancelled <b>x</b>').waitFor()
+  if (page.url().includes('error')) throw new Error('URL not cleaned: ' + page.url())
+  if (await page.locator('b').count()) throw new Error('HTML rendered')
+}, { signedOut: true })
+
+await scenario('Keyboard: Tab to a task and press Enter to open it', async ({ page }) => {
+  await boot(page)
+  await newTask(page, { title: 'Keys' })
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await row(page, 'Keys').focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('dialog', { name: 'Keys' }).waitFor()
+})
+
+await scenario('Unexpected errors are shown, not swallowed', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => { setTimeout(() => Promise.reject(new Error('surprise failure')), 0) })
+  await page.getByText('Something went wrong: surprise failure').waitFor()
 })
 
 await browser.close()

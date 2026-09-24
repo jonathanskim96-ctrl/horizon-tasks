@@ -16,6 +16,8 @@ interface Props {
   onComplete: (t: Task) => void
   onDelete: (t: Task) => void
   onToggleChecklist: (t: Task, index: number) => void
+  /** `${taskId}:${index}` of items currently saving. */
+  pendingChecks: ReadonlySet<string>
 }
 
 export function TaskDetail(p: Props) {
@@ -53,8 +55,13 @@ export function TaskDetail(p: Props) {
         <section className="detail-section">
           <div className="field-label">Checklist</div>
           {t.checklist.map((item, i) => (
-            <label className="checklist-view" key={i}>
-              <input type="checkbox" checked={item.done} onChange={() => p.onToggleChecklist(t, i)} />
+            <label className={`checklist-view${p.pendingChecks.has(`${t.id}:${i}`) ? ' pending' : ''}`} key={i}>
+              <input
+                type="checkbox"
+                checked={item.done}
+                disabled={p.pendingChecks.has(`${t.id}:${i}`)}
+                onChange={() => p.onToggleChecklist(t, i)}
+              />
               <span className={item.done ? 'done' : ''}>{item.text}</span>
             </label>
           ))}

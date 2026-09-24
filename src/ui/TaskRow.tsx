@@ -17,7 +17,19 @@ export function TaskRow({ task: t, data, today, onOpen, onComplete }: Props) {
   const crumbs = breadcrumb(data.tasks, t)
   const progress = subtaskProgress(data.tasks, data.completions, t.id)
   return (
-    <div className={`task-row${overdue ? ' overdue' : ''}`} onClick={() => onOpen(t)}>
+    <div
+      className={`task-row${overdue ? ' overdue' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open “${t.title}”`}
+      onClick={() => onOpen(t)}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          onOpen(t)
+        }
+      }}
+    >
       <button
         className="check"
         aria-label={`Complete “${t.title}”`}

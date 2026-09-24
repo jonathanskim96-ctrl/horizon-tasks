@@ -67,6 +67,32 @@ Found and fixed:
   stale data; such reloads are now discarded.
 - Subtasks no longer pre-fill the parent's category (spec: no default).
 
+### Second pass (re-checking the first pass's own changes)
+
+Found and fixed:
+- **Checklist double tap silently dropped** (the write guard deduped the second
+  tap). Items now lock visibly while saving; every tap takes effect or is visibly blocked.
+- **Failed Google sign-in was invisible** (error came back in the URL and was
+  ignored). Now shown on the sign-in screen, URL cleaned; getSession errors surfaced.
+- **Sheet of a task removed on another device** stayed "open" invisibly (and
+  hid error banners). It now closes with a notice; own completes/deletes excluded.
+- **Discarded stale reload wasn't retried**, so other devices' changes could lag;
+  now reloads again (bounded).
+- A regression introduced during this pass (planning step moved outside the
+  error handler) was caught in review and fixed before commit.
+- Global safety net: unhandled errors/rejections show an on-screen banner.
+- Keyboard: task rows are focusable and open with Enter/Space.
+- Attack suite gap: removing the checklist-size or notes-length constraint went
+  unnoticed; checks added, and every mutation is now caught.
+- Verified: CSP doesn't block category colors; unit tests pass in 4 timezones
+  (incl. UTC+14 / UTC−11); app updates never force-reload mid-edit.
+
+### Known gaps (not built yet, by plan)
+Overdue popup (incl. "Not needed"/skip), History tab (restore, permanent delete,
+export), Weekly/Monthly/Later tabs, Quick Add + FAB menu, import from the
+artifact, category edit/delete, moving a task to another parent, live realtime
+sync (currently refresh-on-focus), offline editing, PNG app icons for iOS.
+
 ## Design discipline (each was a real bug before)
 
 - Integer-only priority, checked in `validateTask` *and* in the DB.
@@ -131,3 +157,4 @@ Found and fixed:
 - 2026-09-24 — Security pass: 0002_hardening, PKCE, size limits, safeColor, CLAUDE.md checklist.
 - 2026-09-24 — Session 2: Dashboard, Daily, Forever, task form, detail, complete/delete flows.
 - 2026-09-24 — Session 2b: test + security pass (contract, attack, mutation, browser suites), 0003, CSP.
+- 2026-09-24 — Session 2c: second verification pass; 5 more fixes, suites extended (20 e2e, 60+ attack checks).

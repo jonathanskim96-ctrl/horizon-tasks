@@ -112,6 +112,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .checklist-item input[type=text] { flex: 1; }
 .checklist-view { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
 .checklist-view input { width: 18px; height: 18px; accent-color: var(--good); }
+.checklist-view.pending { opacity: .5; cursor: progress; }
 .checklist-view .done { text-decoration: line-through; color: var(--faint); }
 .add-row { background: none; border: 1px dashed var(--border); color: var(--muted); border-radius: var(--radius-sm); padding: 9px; width: 100%; font-size: 13px; font-weight: 600; margin-top: 8px; }
 .btn-row { display: flex; gap: 10px; margin-top: 18px; }

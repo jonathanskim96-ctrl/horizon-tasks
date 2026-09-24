@@ -51,6 +51,9 @@ export function Main({ email }: { email: string }) {
   const [toast, setToast] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Checklist items with a save in flight are disabled, so a quick second tap
+  // can't be silently swallowed by the write guard.
+  const [pendingChecks, setPendingChecks] = useState<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (!toast) return
@@ -59,6 +62,21 @@ export function Main({ email }: { email: string }) {
   }, [toast])
 
   const find = useCallback((id: string) => data?.tasks.find((t) => t.id === id), [data])
+
+  // The open sheet's task can vanish (completed/deleted on another device):
+  // close the sheet and say so, instead of leaving an invisible open state.
+  const sheetTaskId = sheet && (sheet.kind === 'form' ? (sheet.editingId ?? sheet.parentId) : sheet.id)
+  // Tasks this device removed itself (complete/delete) are excluded.
+  const [ownRemovals, setOwnRemovals] = useState<ReadonlySet<string>>(new Set())
+  const markOwnRemovals = (ids: string[]) => setOwnRemovals((s) => new Set([...s, ...ids]))
+  const unmarkOwnRemovals = (ids: string[]) => setOwnRemovals((s) => new Set([...s].filter((id) => !ids.includes(id))))
+  const sheetTaskGone =
+    !!data && !!sheetTaskId && !data.tasks.some((t) => t.id === sheetTaskId) && !ownRemovals.has(sheetTaskId)
+  if (sheetTaskGone) {
+    // React's "adjust state during render" pattern (no effect round-trip).
+    setSheet(null)
+    setToast('That task was changed on another device.')
+  }
   const close = useCallback(() => setSheet(null), [])
   const report = (e: unknown) => setActionError(e instanceof BusyError ? e.message : `Couldn't save: ${(e as Error).message}`)
 
@@ -69,13 +87,18 @@ export function Main({ email }: { email: string }) {
       return
     }
     setBusy(true)
+    let removed: string[] = []
     try {
-      await store.commit(`complete:${t.id}`, planFinish(data.tasks, data.categories, t.id, 'completed'))
+      const cs = planFinish(data.tasks, data.categories, t.id, 'completed')
+      removed = cs.deletes
+      markOwnRemovals(removed)
+      await store.commit(`complete:${t.id}`, cs)
       const next = nextOccurrenceDate(t)
       setToast(next ? `Completed — next due ${next}.` : 'Completed.')
       setSheet(null)
       setActionError(null)
     } catch (e) {
+      unmarkOwnRemovals(removed)
       report(e)
     } finally {
       setBusy(false)
@@ -85,12 +108,17 @@ export function Main({ email }: { email: string }) {
   const remove = async (t: Task) => {
     if (!data) return
     setBusy(true)
+    let removed: string[] = []
     try {
-      await store.commit(`delete:${t.id}`, planDelete(data.tasks, t.id))
+      const cs = planDelete(data.tasks, t.id)
+      removed = cs.deletes
+      markOwnRemovals(removed)
+      await store.commit(`delete:${t.id}`, cs)
       setToast('Deleted.')
       setSheet(null)
       setActionError(null)
     } catch (e) {
+      unmarkOwnRemovals(removed)
       report(e)
     } finally {
       setBusy(false)
@@ -98,10 +126,19 @@ export function Main({ email }: { email: string }) {
   }
 
   const toggleChecklist = async (t: Task, i: number) => {
+    const key = `${t.id}:${i}`
+    if (pendingChecks.has(key)) return
+    setPendingChecks((s) => new Set(s).add(key))
     try {
-      await store.commit(`checklist:${t.id}:${i}`, planToggleChecklist(t, i))
+      await store.commit(`checklist:${key}`, planToggleChecklist(t, i))
     } catch (e) {
       report(e)
+    } finally {
+      setPendingChecks((s) => {
+        const next = new Set(s)
+        next.delete(key)
+        return next
+      })
     }
   }
 
@@ -178,6 +215,7 @@ export function Main({ email }: { email: string }) {
           onComplete={complete}
           onDelete={(t) => setSheet({ kind: 'confirmDelete', id: t.id })}
           onToggleChecklist={toggleChecklist}
+          pendingChecks={pendingChecks}
         />
       )}
       {sheet?.kind === 'detail' && actionError && (

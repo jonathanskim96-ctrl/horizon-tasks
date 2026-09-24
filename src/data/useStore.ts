@@ -15,12 +15,16 @@ export function useStore() {
   const writes = useRef(0)
 
   const reload = useCallback(async () => {
-    const startedAt = writes.current
     try {
-      const snap = await loadAll()
-      if (writes.current !== startedAt) return
-      setData(snap)
-      setLoadError(null)
+      // A write landed mid-load → that result is stale; load again (bounded).
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const startedAt = writes.current
+        const snap = await loadAll()
+        if (writes.current !== startedAt) continue
+        setData(snap)
+        setLoadError(null)
+        return
+      }
     } catch (e) {
       setLoadError((e as Error).message)
     }

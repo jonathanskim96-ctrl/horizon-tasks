@@ -22,13 +22,13 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
   )
 }
 
-export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorBanner({ message, onRetry, retryLabel = 'Retry' }: { message: string; onRetry?: () => void; retryLabel?: string }) {
   return (
     <div className="error" role="alert">
       {message}
       {onRetry && (
         <button className="link" onClick={onRetry}>
-          Retry
+          {retryLabel}
         </button>
       )}
     </div>
