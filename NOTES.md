@@ -31,6 +31,16 @@ data, forms, handlers, render or storage.
 - `strict_int()` rejects `3.7` for priority/depth/interval instead of rounding
   (Postgres would otherwise round silently).
 
+## Security (see CLAUDE.md for the standing checklist)
+
+- 0002_hardening: `anon` has no table/function access; history has no UPDATE
+  privilege; `strict_int` pins search_path; size limits (title 500, notes 20k,
+  checklist ≤100 items/64KB, category name 60, snapshot 128KB).
+- Auth uses the PKCE flow. The deploy workflow refuses secret/service_role keys.
+- Supabase's "destructive operations" warning on 0001/0002 is triggered by the
+  words `delete`/`revoke`; neither file removes data.
+- After first sign-in: disable new sign-ups and the Email provider (SETUP Part 7).
+
 ## Design discipline (each was a real bug before)
 
 - Integer-only priority, checked in `validateTask` *and* in the DB.
@@ -78,3 +88,4 @@ data, forms, handlers, render or storage.
   unit tests, Google sign-in wiring, minimal signed-in shell.
 - 2026-09-24 — Assumptions confirmed; real category colors + "Other"; dark theme; `docs/SETUP.md`.
 - 2026-09-24 — GitHub Pages auto-deploy; setup guide rewritten browser-only.
+- 2026-09-24 — Security pass: 0002_hardening, PKCE, size limits, safeColor, CLAUDE.md checklist.

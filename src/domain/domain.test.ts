@@ -3,7 +3,7 @@ import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } 
 import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, sortForever, sortTasks, breadcrumb } from './placement'
 import { validateQuickAdd, validateTask } from './validate'
 import { cloneSubtree, nextOccurrenceDate, planDelete, planFinish, planRestore, subtaskProgress, type Env } from './actions'
-import { nextCategoryColor, PALETTE } from './categories'
+import { nextCategoryColor, PALETTE, safeColor } from './categories'
 import type { Category, Task } from './types'
 
 const cats: Category[] = [{ id: 'c1', name: 'Admin', color: '#ea580c', sortOrder: 0 }]
@@ -65,6 +65,13 @@ describe('validation', () => {
     expect(validateTask({ title: 'x', priority: 3, categoryId: 'c1', dueDate: TODAY, recurrence: { everyNDays: 7, endDate: '2026-09-01' } }, ctx).ok).toBe(false)
     const r = validateTask({ title: 'x', priority: 3, categoryId: 'c1', dueDate: TODAY, recurrence: { everyNDays: 7, endDate: '' } }, ctx)
     expect(r.ok && r.value.recurrence).toEqual({ everyNDays: 7, endDate: null })
+  })
+  it('enforces size limits', () => {
+    const base = { priority: 3, categoryId: 'c1', dueDate: TODAY }
+    expect(validateTask({ ...base, title: 'x'.repeat(501) }, ctx).ok).toBe(false)
+    expect(validateTask({ ...base, title: 'x', notes: 'n'.repeat(20001) }, ctx).ok).toBe(false)
+    const items = Array.from({ length: 101 }, (_, i) => ({ text: `i${i}`, done: false }))
+    expect(validateTask({ ...base, title: 'x', checklist: items }, ctx).ok).toBe(false)
   })
   it('quick add: skips blank rows, all-or-nothing on invalid rows', () => {
     const row = { title: 'a', dueDate: TODAY, priority: 2, categoryId: 'c1' }
@@ -172,5 +179,10 @@ describe('categories', () => {
     expect(nextCategoryColor([])).toBe(PALETTE[0])
     const full = PALETTE.map((color, i) => ({ id: `${i}`, name: `${i}`, color, sortOrder: i }))
     expect(nextCategoryColor(full)).toBe(PALETTE[0])
+  })
+  it('only lets real hex colors through to styles', () => {
+    expect(safeColor('#5b8cff')).toBe('#5b8cff')
+    expect(safeColor('red;background:url(x)')).toBe('#8b929c')
+    expect(safeColor(undefined)).toBe('#8b929c')
   })
 })

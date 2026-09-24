@@ -1,8 +1,18 @@
 -- Behavioural checks for 0001_init.sql. Run via run.sh; any failure aborts.
 \set ON_ERROR_STOP on
 insert into auth.users values ('00000000-0000-0000-0000-00000000000a'), ('00000000-0000-0000-0000-00000000000b');
-grant select, insert, update, delete on all tables in schema public to authenticated;
-grant execute on all functions in schema public to authenticated;
+
+-- Signed-out visitors can't read tables or call functions at all.
+set role anon;
+do $$ begin
+  begin perform 1 from public.tasks; raise exception 'anon read tasks';
+  exception when insufficient_privilege then null; end;
+  begin perform public.apply_changes(); raise exception 'anon called apply_changes';
+  exception when insufficient_privilege then null; end;
+  begin perform public.seed_starter_categories('[]'); raise exception 'anon seeded';
+  exception when insufficient_privilege then null; end;
+end $$;
+reset role;
 
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
@@ -56,6 +66,21 @@ do $$ begin
   exception when others then null;
   end;
   assert (select count(*) from public.completions) = 1, 'rolled back';
+end $$;
+
+-- history is append-only
+do $$ begin
+  begin update public.completions set outcome = 'skipped'; raise exception 'history updated';
+  exception when insufficient_privilege then null; end;
+end $$;
+
+-- size limits
+do $$ begin
+  begin
+    perform public.apply_changes(inserts => jsonb_build_array(jsonb_build_object('title',repeat('x',501),'priority',3,
+      'category_id',(select id from public.categories where name='A'),'due_date','2026-10-10')));
+    raise exception 'long title accepted';
+  exception when check_violation then null; end;
 end $$;
 
 -- user B sees nothing of A's

@@ -21,3 +21,7 @@ export function nextCategoryColor(existing: Category[]): string {
   const used = new Set(existing.map((c) => c.color.toLowerCase()))
   return PALETTE.find((c) => !used.has(c)) ?? PALETTE[existing.length % PALETTE.length]
 }
+
+const HEX = /^#[0-9a-fA-F]{6}$/
+/** Only ever put a validated hex into a style attribute (history snapshots aren't DB-checked). */
+export const safeColor = (c: unknown, fallback = '#8b929c'): string => (typeof c === 'string' && HEX.test(c) ? c : fallback)

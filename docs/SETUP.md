@@ -51,7 +51,11 @@ It creates the four tables the app uses and the security rules that keep them pr
    **Ctrl + V** (Mac: **Cmd + V**). The box now holds about 200 lines.
 5. **Run it.** Click the green **Run** button (bottom-right of the box), or press
    **Ctrl + Enter** (Mac: **Cmd + Enter**).
-   - If a pop-up asks you to confirm running the query, click **Run this query**.
+   - Supabase will pop up **"Potential issue detected … destructive operations"**.
+     That's expected and safe here. Its scanner sees the words `delete` / `on delete
+     cascade` in the file, but those only *define* rules for later (e.g. "deleting a
+     task also deletes its subtasks"). Running the file deletes nothing, and your
+     project is empty. Click **Run query**.
 6. **Check the result.** The panel under the box should say
    **"Success. No rows returned."** That's the correct result: the file creates
    things but doesn't return any data.
@@ -62,7 +66,13 @@ It creates the four tables the app uses and the security rules that keep them pr
    Under the `public` schema you should see four tables: **categories**, **completions**,
    **profiles** and **tasks**, all empty. Categories get created on your first sign-in.
 
-Each migration file runs **once**. Future changes will arrive as new files
+8. **Run the second file the same way.** Repeat steps 1–6 with
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0002_hardening.sql`
+   (security tightening: signed-out visitors get no access at all, plus size limits).
+   It may show the same warning, because it removes permissions. Click **Run query**.
+   Expect **"Success. No rows returned."**
+
+Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 
 > **Shortcut for the future:** connect the **Supabase connector** at
@@ -121,9 +131,12 @@ Each migration file runs **once**. Future changes will arrive as new files
 
 ## Part 7 — Lock the door
 
-Open `https://supabase.com/dashboard/project/<ref>/auth/providers` (or
-**Authentication → Sign In / Providers**) → turn **off "Allow new users to sign up"**
-→ **Save**. Do this *after* your first sign-in.
+Do this *after* your first sign-in. Open
+`https://supabase.com/dashboard/project/<ref>/auth/providers` (or
+**Authentication → Sign In / Providers**):
+1. Turn **off "Allow new users to sign up"** → **Save**. Nobody new can create an account.
+2. In the provider list, click **Email** → turn it **off** → **Save**. Supabase turns
+   email/password sign-in on by default, and the app only uses Google.
 
 ---
 

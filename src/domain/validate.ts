@@ -14,7 +14,7 @@ export interface TaskInput {
   recurrence?: { everyNDays: unknown; endDate?: unknown } | null
 }
 
-export type FieldErrors = Partial<Record<'title' | 'priority' | 'categoryId' | 'dueDate' | 'parentId' | 'recurrence' | 'checklist', string>>
+export type FieldErrors = Partial<Record<'title' | 'notes' | 'priority' | 'categoryId' | 'dueDate' | 'parentId' | 'recurrence' | 'checklist', string>>
 
 export type ValidationResult =
   | { ok: true; value: Omit<Task, 'id' | 'createdAt'> }
@@ -27,6 +27,9 @@ export interface ValidationContext {
   selfId?: string
 }
 
+/** Size limits — mirrored by DB constraints in 0002_hardening.sql. */
+export const LIMITS = { title: 500, notes: 20000, checklistItems: 100, checklistText: 500 } as const
+
 export function isValidPriority(p: unknown): p is number {
   return typeof p === 'number' && Number.isInteger(p) && p >= 1 && p <= 5
 }
@@ -37,8 +40,10 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
 
   const title = typeof input.title === 'string' ? input.title.trim() : ''
   if (!title) errors.title = 'Title is required.'
+  else if (title.length > LIMITS.title) errors.title = `Title is too long (max ${LIMITS.title} characters).`
 
   const notes = input.notes == null ? '' : String(input.notes)
+  if (notes.length > LIMITS.notes) errors.notes = `Notes are too long (max ${LIMITS.notes} characters).`
 
   if (!isValidPriority(input.priority)) errors.priority = 'Priority must be a whole number from 1 to 5.'
 
@@ -62,6 +67,9 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
       checklist = input.checklist
         .map((i) => ({ text: String(i?.text ?? '').trim(), done: i?.done === true }))
         .filter((i) => i.text)
+    if (checklist.length > LIMITS.checklistItems) errors.checklist = `At most ${LIMITS.checklistItems} checklist items.`
+    else if (checklist.some((i) => i.text.length > LIMITS.checklistText))
+      errors.checklist = `Checklist items can be at most ${LIMITS.checklistText} characters.`
   }
 
   let parentId: string | null = null
