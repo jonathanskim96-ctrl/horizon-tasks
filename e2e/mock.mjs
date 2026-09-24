@@ -1,7 +1,7 @@
 // Tiny in-memory stand-in for Supabase (PostgREST + RPCs) with fault injection.
 export function createMock() {
   const db = { categories: [], tasks: [], completions: [] }
-  const faults = { failLoad: 0, failWrite: 0, abortWrite: 0, offline: false, slowMs: 0 }
+  const faults = { failLoad: 0, failWrite: 0, abortWrite: 0, offline: false, slowMs: 0, realtimeAuto: false }
   const calls = { apply: 0 }
   let n = 0
   const id = () => `00000000-0000-0000-0000-${String(++n).padStart(12, '0')}`
@@ -33,6 +33,7 @@ export function createMock() {
       db.tasks.push(...body.inserts)
       for (const t of body.updates) db.tasks = db.tasks.map((x) => (x.id === t.id ? t : x))
       db.completions = db.completions.filter((c) => !body.history_deletes.includes(c.id))
+      if (faults.realtimeAuto) setTimeout(() => pushChange('tasks'), 50) // like Postgres → Realtime
       return route.fulfill({ status: 204, body: '' })
     }
     if (p === '/rest/v1/categories' && (req.method() === 'PATCH' || req.method() === 'DELETE')) {

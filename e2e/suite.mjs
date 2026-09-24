@@ -712,6 +712,71 @@ await scenario('A change made while offline changes are still syncing is never l
   if (titles.join() !== 'Added during sync B,Queued A') throw new Error('lost a change: ' + titles)
 })
 
+await scenario('Live sync between two open devices (no refresh, no focus change)', async ({ page, mock, ctx }) => {
+  mock.faults.realtimeAuto = true
+  mock.seed([{ id: U(1), title: 'Shared task', due_date: iso(0) }])
+  await boot(page)
+  const laptop = await ctx.newPage()
+  await laptop.route('http://mock.supabase.local/**', mock.handler)
+  await laptop.routeWebSocket(/mock\.supabase\.local\/realtime/, mock.realtime)
+  await laptop.goto(BASE)
+  await laptop.getByText('Due today', { exact: true }).waitFor()
+  await page.waitForTimeout(500) // both channels joined
+  await page.getByRole('button', { name: 'Complete “Shared task”' }).first().click()
+  await page.getByText('Completed.', { exact: true }).waitFor()
+  await laptop.waitForFunction(() => ![...document.querySelectorAll('.task-row')].some((r) => r.textContent.includes('Shared task')), null, { timeout: 5000 })
+  await newTask(laptop, { title: 'From laptop' })
+  await row(page, 'From laptop').waitFor({ timeout: 5000 })
+})
+
+await scenario('Heavy offline use: 100 queued changes sync in order', async ({ page, mock, ctx }) => {
+  await boot(page)
+  mock.faults.offline = true
+  await ctx.setOffline(true)
+  for (let batch = 0; batch < 20; batch++) {
+    await page.getByRole('button', { name: 'Add task', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Quick add' }).click()
+    for (let i = 1; i <= 5; i++) {
+      await page.getByLabel(`Row ${i} title`).fill(`Bulk ${batch}-${i}`)
+      await page.getByLabel(`Row ${i} due date`).fill(iso(i))
+      await page.getByLabel(`Row ${i} priority`).selectOption(String(i))
+      await page.getByLabel(`Row ${i} category`).selectOption({ label: 'Admin' })
+    }
+    await page.getByRole('button', { name: 'Save all' }).click()
+    await page.getByText('Added 5 tasks.').first().waitFor()
+    await page.keyboard.press('Escape')
+  }
+  await page.getByText('20 to sync').waitFor()
+  mock.faults.offline = false
+  const t0 = Date.now()
+  await ctx.setOffline(false)
+  await page.waitForFunction(() => !document.querySelector('.pending-chip'), null, { timeout: 30000 })
+  const took = Date.now() - t0
+  if (mock.db.tasks.length !== 100) throw new Error('synced ' + mock.db.tasks.length)
+  if (took > 15000) throw new Error('sync too slow: ' + took)
+})
+
+await scenario('Sign-out erases the device copy', async ({ page, mock }) => {
+  mock.seed([{ id: U(1), title: 'Private thing', due_date: iso(0) }])
+  await boot(page)
+  await page.waitForTimeout(300)
+  const dump = () => page.evaluate(() => new Promise((res) => {
+    const req = indexedDB.open('horizon-tasks', 1)
+    req.onsuccess = () => {
+      const tx = req.result.transaction('kv', 'readonly')
+      const all = tx.objectStore('kv').getAll()
+      all.onsuccess = () => res(JSON.stringify(all.result))
+    }
+    req.onerror = () => res('')
+  }))
+  if (!(await dump()).includes('Private thing')) throw new Error('cache not written')
+  if (/access_token|refresh_token/.test(await dump())) throw new Error('tokens in the cache')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByRole('button', { name: 'Sign in with Google' }).waitFor()
+  await page.waitForTimeout(300)
+  if ((await dump()).includes('Private thing')) throw new Error('device copy survived sign-out')
+})
+
 await browser.close()
 for (const r of results) console.log(r.join('  '))
 const passed = results.filter((r) => r[0] === 'PASS').length

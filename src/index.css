@@ -193,8 +193,9 @@ input[type=file] { margin: 10px 0; color: var(--muted); max-width: 100%; }
 .offline-banner { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius-sm); padding: 10px 12px; margin: 6px 0; font-size: 13px; }
 
 /* categories */
-.cat-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
-.cat-row .cat-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.cat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
+.cat-row .cat-name { flex: 1 1 8em; min-width: 0; font-weight: 600; overflow-wrap: break-word; }
+.cat-row .cat-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .cat-dot.big { width: 14px; height: 14px; }
 .cat-edit { background: var(--surface-2); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: 10px; }
 .cat-edit.danger-zone { border-color: var(--danger); }

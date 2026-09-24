@@ -136,6 +136,18 @@ keeps its parent even when it lands after the parent's due date.
   counts as success. Category changes/import need a connection. Sign-out
   wipes the device copy (asks first if changes are unsynced).
 
+Review pass 1 (code): fixed a lost-change race in offline sync (a change
+made while the queue was syncing could be dropped), a slow retry after
+flaky connections, possible double display after a lost reply (applyLocal is
+now idempotent), and sign-out wiping the device copy before signing out /
+signing out every device (now: this device only, then wipe). New fuzzing:
+moves, category reassignment, offline outbox vs. concurrent server.
+
+Review pass 2 (black-box): live sync between two open sessions, 100 queued
+offline changes syncing in order, sign-out erasing the device copy (and no
+tokens in it), 320px layouts (fixed cramped category rows), published bundle
+re-inspected (wss only, no secrets/test code/maps).
+
 ### Known gaps
 None from the spec. Possible later polish: category reordering, notifications.
 

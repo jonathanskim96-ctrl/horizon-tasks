@@ -43,13 +43,15 @@ export function CategoriesSheet({ data, store, onClose, onToast }: Props) {
             <div className="cat-row" key={c.id}>
               <span className="cat-dot big" style={{ background: safeColor(c.color) }} />
               <span className="cat-name">{c.name}</span>
-              <span className="muted small">{used(c.id)} task{used(c.id) === 1 ? '' : 's'}</span>
-              <button className="btn small" onClick={() => { setDeleting(null); setEditing(c.id) }} aria-label={`Edit category ${c.name}`}>
-                Edit
-              </button>
-              <button className="btn small danger-outline" onClick={() => { setEditing(null); setDeleting(c.id) }} aria-label={`Delete category ${c.name}`}>
-                Delete
-              </button>
+              <span className="cat-actions">
+                <span className="muted small">{used(c.id)} task{used(c.id) === 1 ? '' : 's'}</span>
+                <button className="btn small" onClick={() => { setDeleting(null); setEditing(c.id) }} aria-label={`Edit category ${c.name}`}>
+                  Edit
+                </button>
+                <button className="btn small danger-outline" onClick={() => { setEditing(null); setDeleting(c.id) }} aria-label={`Delete category ${c.name}`}>
+                  Delete
+                </button>
+              </span>
             </div>
           ),
         )}
