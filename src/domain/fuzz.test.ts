@@ -35,12 +35,12 @@ function checkInvariants(s: Snapshot, recurrenceMade: Set<string>) {
       const p = s.tasks.find((x) => x.id === t.parentId)
       expect(p, `orphan ${t.title}`).toBeDefined()
       expect(t.depth).toBe(p!.depth + 1)
-      if (p!.dueDate && t.dueDate && !recurrenceMade.has(t.id)) expect(t.dueDate <= p!.dueDate, 'subtask after parent').toBe(true)
+      if (p!.dueDate && t.dueDate) expect(t.dueDate <= p!.dueDate, `subtask after parent (${recurrenceMade.has(t.id) ? 'recurrence' : 'edit'})`).toBe(true)
     } else expect(t.depth).toBe(0)
     expect(t.depth).toBeLessThanOrEqual(MAX_DEPTH)
     // Everything in state must still pass the validator the DB mirrors.
     const r = validateTask({ ...t, parentId: t.parentId }, { categories: s.categories, tasks: s.tasks.filter((x) => x.id !== t.id).concat({ ...t, dueDate: null }), selfId: t.id })
-    if (!r.ok && !(recurrenceMade.has(t.id) && r.errors.dueDate)) expect(r.errors, `invalid task ${t.title}`).toEqual({})
+    if (!r.ok) expect(r.errors, `invalid task ${t.title}`).toEqual({})
   }
   const cids = new Set(s.completions.map((c) => c.id))
   expect(cids.size).toBe(s.completions.length)
@@ -66,7 +66,7 @@ describe('fuzz: random action sequences keep data consistent', () => {
               {
                 title: pick(TITLES), priority: 1 + Math.floor(r() * 5), categoryId: pick(cats).id, dueDate: r() < 0.1 ? null : due,
                 ongoing: r() < 0.15, parentId: parent?.id ?? null, checklist: r() < 0.3 ? [{ text: 'c', done: false }] : [],
-                recurrence: !parent && r() < 0.3 ? { everyNDays: 1 + Math.floor(r() * 10), endDate: r() < 0.3 ? addDays(due, 20) : null } : null,
+                recurrence: r() < 0.3 ? { everyNDays: 1 + Math.floor(r() * 10), endDate: r() < 0.3 ? addDays(due, 20) : null } : null,
               },
               { categories: s.categories, tasks: s.tasks },
             )
@@ -149,16 +149,27 @@ describe('fuzz: random action sequences keep data consistent', () => {
   })
 })
 
-// A recurring *subtask* can produce a next occurrence due after its parent —
-// documented behaviour (open product question), asserted here so it's explicit.
+// Decision 2026-09-24: a recurring subtask's next occurrence moves to the top
+// level when it would be due after its parent; otherwise it stays nested.
 describe('recurring subtasks', () => {
-  it('next occurrence keeps its parent even if it lands after the parent due date', () => {
-    const env: Env = { now: () => '2026-09-24T12:00:00.000Z', newId: (() => { let i = 0; return () => `x${++i}` })() }
-    const tasks: Task[] = [
-      { id: 'p', title: 'P', notes: '', priority: 3, categoryId: 'c1', ongoing: false, dueDate: '2026-10-05', checklist: [], parentId: null, depth: 0, recurrence: null, createdAt: '' },
-      { id: 'c', title: 'C', notes: '', priority: 3, categoryId: 'c1', ongoing: false, dueDate: '2026-10-01', checklist: [], parentId: 'p', depth: 1, recurrence: { everyNDays: 7, endDate: null }, createdAt: '' },
+  const env: Env = { now: () => '2026-09-24T12:00:00.000Z', newId: (() => { let i = 0; return () => `x${++i}` })() }
+  const base = (over: Partial<Task>): Task => ({ id: 'p', title: 'P', notes: '', priority: 3, categoryId: 'c1', ongoing: false, dueDate: '2026-10-05', checklist: [], parentId: null, depth: 0, recurrence: null, createdAt: '', ...over })
+  it('moves to top level (with its own subtree) when it would land after the parent', () => {
+    const tasks = [
+      base({}),
+      base({ id: 'c', title: 'C', dueDate: '2026-10-01', parentId: 'p', depth: 1, recurrence: { everyNDays: 7, endDate: null } }),
+      base({ id: 'g', title: 'G', dueDate: '2026-09-30', parentId: 'c', depth: 2 }),
     ]
     const cs = planFinish(tasks, cats, 'c', 'completed', env)
-    expect(cs.inserts[0]).toMatchObject({ parentId: 'p', dueDate: '2026-10-08' })
+    expect(cs.inserts[0]).toMatchObject({ title: 'C', parentId: null, depth: 0, dueDate: '2026-10-08' })
+    expect(cs.inserts[1]).toMatchObject({ title: 'G', parentId: cs.inserts[0].id, depth: 1, dueDate: '2026-10-07' })
+  })
+  it('stays under the parent when it still fits', () => {
+    const tasks = [base({ dueDate: '2026-10-31' }), base({ id: 'c', title: 'C', dueDate: '2026-10-01', parentId: 'p', depth: 1, recurrence: { everyNDays: 7, endDate: null } })]
+    expect(planFinish(tasks, cats, 'c', 'completed', env).inserts[0]).toMatchObject({ parentId: 'p', depth: 1, dueDate: '2026-10-08' })
+  })
+  it('stays under a parent that has no due date', () => {
+    const tasks = [base({ dueDate: null, ongoing: true }), base({ id: 'c', title: 'C', dueDate: '2026-10-01', parentId: 'p', depth: 1, recurrence: { everyNDays: 7, endDate: null } })]
+    expect(planFinish(tasks, cats, 'c', 'completed', env).inserts[0].parentId).toBe('p')
   })
 })

@@ -97,3 +97,16 @@ export function breadcrumb(tasks: Task[], t: Task): string[] {
   }
   return out
 }
+
+/** How many levels of subtasks sit below a task (0 when it has none). */
+export function subtreeHeight(tasks: Task[], id: string): number {
+  const kids = childrenOf(tasks, id)
+  return kids.length ? 1 + Math.max(...kids.map((k) => subtreeHeight(tasks, k.id))) : 0
+}
+
+/** Tasks that `self` (with its subtree) could be moved under. */
+export function parentCandidates(tasks: Task[], selfId: string | undefined, maxDepth: number): Task[] {
+  const blocked = new Set(selfId ? [selfId, ...descendantsOf(tasks, selfId).map((t) => t.id)] : [])
+  const height = selfId ? subtreeHeight(tasks, selfId) : 0
+  return tasks.filter((t) => !blocked.has(t.id) && t.depth + 1 + height <= maxDepth)
+}

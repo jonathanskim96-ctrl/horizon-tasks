@@ -38,7 +38,7 @@ export default function App() {
   return (
     <Shell>
       {crashBanner}
-      <Main key={session.user.id} email={session.user.email ?? ''} />
+      <Main key={session.user.id} userId={session.user.id} email={session.user.email ?? ''} />
     </Shell>
   )
 }

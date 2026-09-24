@@ -101,4 +101,10 @@ reset role;
 do $$ begin
   assert (select count(*) from public.tasks) = 0, 'cross-user insert blocked';
 end $$;
+-- 0005: all three tables publish realtime changes (and nothing else does).
+do $$ begin
+  assert (select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'
+          and tablename in ('tasks','categories','completions')) = 3, 'realtime publication';
+  assert (select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'profiles') = 0, 'profiles published';
+end $$;
 \echo ALL SQL CHECKS PASSED

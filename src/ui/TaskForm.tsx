@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { planCreate, planUpdate } from '../domain/actions'
 import { safeColor } from '../domain/categories'
+import { breadcrumb, parentCandidates } from '../domain/placement'
 import { MAX_DEPTH, type ChecklistItem, type ISODate, type Snapshot, type Task } from '../domain/types'
 import { validateTask, type FieldErrors } from '../domain/validate'
 import type { Store } from '../data/useStore'
@@ -19,7 +20,12 @@ interface Props {
 }
 
 export function TaskForm({ data, store, editing, parentId, presetDue, onClose, onSaved }: Props) {
-  const parent = data.tasks.find((t) => t.id === (editing?.parentId ?? parentId))
+  const [parentSel, setParentSel] = useState(editing?.parentId ?? parentId ?? '')
+  const parent = data.tasks.find((t) => t.id === parentSel)
+  const candidates = [...parentCandidates(data.tasks, editing?.id, MAX_DEPTH)].sort((a, b) =>
+    [...breadcrumb(data.tasks, a), a.title].join(' › ').localeCompare([...breadcrumb(data.tasks, b), b.title].join(' › ')),
+  )
+  const moved = !!editing && (editing.parentId ?? '') !== parentSel
   const [title, setTitle] = useState(editing?.title ?? '')
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [priority, setPriority] = useState<number | null>(editing?.priority ?? null)
@@ -46,7 +52,7 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
         ongoing,
         dueDate,
         checklist,
-        parentId: parent?.id ?? null,
+        parentId: parentSel || null,
         recurrence: repeat ? { everyNDays: everyN.trim() === '' ? NaN : Number(everyN), endDate } : null,
       },
       { categories: data.categories, tasks: data.tasks, selfId: editing?.id },
@@ -58,9 +64,19 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
     setErrors({})
     setSaving(true)
     try {
-      const cs = editing ? planUpdate(editing, r.value) : planCreate(r.value)
+      const cs = editing ? planUpdate(editing, r.value, data.tasks) : planCreate(r.value)
       await store.commit(`save:${editing?.id ?? 'new'}`, cs)
-      onSaved(editing ? 'Task updated.' : parent ? 'Subtask added.' : 'Task added.')
+      onSaved(
+        editing
+          ? moved
+            ? parent
+              ? `Moved under “${parent.title}”.`
+              : 'Moved to the top level.'
+            : 'Task updated.'
+          : parent
+            ? 'Subtask added.'
+            : 'Task added.',
+      )
     } catch (e) {
       setSaveError((e as Error).message)
     } finally {
@@ -83,7 +99,7 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
   const heading = editing ? 'Edit task' : parent ? 'New subtask' : 'New task'
   return (
     <Sheet title={heading} onClose={onClose}>
-      {parent && <p className="muted small">Under “{parent.title}”{parent.dueDate ? ` · due ${parent.dueDate}` : ''}</p>}
+      {parent && !editing && <p className="muted small">Under “{parent.title}”{parent.dueDate ? ` · due ${parent.dueDate}` : ''}</p>}
       {saveError && <ErrorBanner message={saveError} />}
 
       <Field label="Title" error={errors.title}>
@@ -125,6 +141,19 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
             </button>
           </div>
         )}
+      </Field>
+
+      <Field label="Subtask of" error={errors.parentId}>
+        <select aria-label="Subtask of" value={parentSel} onChange={(e) => setParentSel(e.target.value)}>
+          <option value="">— Nothing (top-level task)</option>
+          {candidates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {[...breadcrumb(data.tasks, t), t.title].join(' › ')}
+              {t.dueDate ? ` (due ${t.dueDate})` : ''}
+            </option>
+          ))}
+        </select>
+        {parent?.dueDate && <div className="muted small">Must be due on or before {parent.dueDate}.</div>}
       </Field>
 
       <label className="toggle-row">

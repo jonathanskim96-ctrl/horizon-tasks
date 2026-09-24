@@ -99,6 +99,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .field-error { color: var(--overdue); font-size: 12.5px; margin-top: 6px; }
 .field input[type=text], .field input[type=date], .field input[type=number], .field textarea, .inline-add input { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 11px; font-size: 15px; }
 .field textarea { min-height: 72px; resize: vertical; }
+.field select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 11px; font-size: 15px; }
 .field-row { display: flex; gap: 10px; }
 .field-row > .field { flex: 1; }
 .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -190,3 +191,18 @@ button.link { background: none; border: 0; color: var(--accent); padding: 0 4px;
 input[type=file] { margin: 10px 0; color: var(--muted); max-width: 100%; }
 
 .offline-banner { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); border-radius: var(--radius-sm); padding: 10px 12px; margin: 6px 0; font-size: 13px; }
+
+/* categories */
+.cat-row { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; }
+.cat-row .cat-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.cat-dot.big { width: 14px; height: 14px; }
+.cat-edit { background: var(--surface-2); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: 10px; }
+.cat-edit.danger-zone { border-color: var(--danger); }
+.cat-edit p { margin: 0 0 8px; }
+.cat-edit input[type=text], .cat-edit select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; }
+.swatch.on { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg) inset; }
+.cat-edit .btn-row { margin-top: 10px; }
+.pending-chip { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; }
+.topbar { flex-wrap: wrap; }

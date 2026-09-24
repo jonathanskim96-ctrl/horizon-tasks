@@ -45,21 +45,38 @@ export function nextOccurrenceDate(t: Task): ISODate | null {
 }
 
 /**
+ * Where a recurring task's next occurrence goes. It stays under its parent
+ * unless it would then be due after the parent, in which case it becomes a
+ * top-level task (decision 2026-09-24), keeping the subtask date rule intact.
+ */
+export function occurrenceParent(tasks: Task[], root: Task, newDue: ISODate): { parentId: string | null; detachedFrom: Task | null } {
+  const parent = root.parentId ? tasks.find((t) => t.id === root.parentId) : undefined
+  if (!parent) return { parentId: null, detachedFrom: null }
+  if (parent.dueDate && newDue > parent.dueDate) return { parentId: null, detachedFrom: parent }
+  return { parentId: parent.id, detachedFrom: null }
+}
+
+/**
  * Clone `root` and its whole active subtree into a new occurrence due `newDue`.
  * Each descendant keeps its day-gap from its own direct parent's due date.
- * Checklists reset to unchecked.
+ * Checklists reset to unchecked. See occurrenceParent for where the root lands.
  */
 export function cloneSubtree(tasks: Task[], root: Task, newDue: ISODate, env: Env): Task[] {
   const createdAt = env.now()
   const out: Task[] = []
+  const { parentId: rootParent } = occurrenceParent(tasks, root, newDue)
+  const depthShift = rootParent === root.parentId ? 0 : -root.depth
   const visit = (orig: Task, newParentId: string | null, due: ISODate | null) => {
     const id = env.newId()
     out.push({
       ...orig,
       id,
       parentId: newParentId,
+      depth: orig.depth + depthShift,
       dueDate: due,
       checklist: orig.checklist.map((i) => ({ text: i.text, done: false })),
+      // A copied subtask whose own repeat series has ended stops repeating.
+      recurrence: orig.recurrence && (!orig.recurrence.endDate || (due && due <= orig.recurrence.endDate)) ? { ...orig.recurrence } : null,
       createdAt,
     })
     for (const child of tasks.filter((c) => c.parentId === orig.id)) {
@@ -72,7 +89,7 @@ export function cloneSubtree(tasks: Task[], root: Task, newDue: ISODate, env: En
       visit(child, id, childDue)
     }
   }
-  visit(root, root.parentId, newDue)
+  visit(root, rootParent, newDue)
   return out
 }
 
@@ -118,17 +135,31 @@ export function planDelete(tasks: Task[], taskId: string): ChangeSet {
   return cs
 }
 
+/** Move every active task in one category to another (before deleting it). */
+export function planReassignCategory(tasks: Task[], fromId: string, toId: string): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.updates = tasks.filter((t) => t.categoryId === fromId).map((t) => ({ ...t, categoryId: toId }))
+  return cs
+}
+
 /**
  * Restore a History entry into active tasks (keeping its original id), under
  * its original parent if that still exists, otherwise at top level.
  */
-export function planRestore(tasks: Task[], categories: Category[], c: Completion, env: Env = defaultEnv): ChangeSet {
+export function planRestore(
+  tasks: Task[],
+  categories: Category[],
+  c: Completion,
+  env: Env = defaultEnv,
+  /** Category to use when the original one has since been deleted. */
+  categoryOverride?: string,
+): ChangeSet {
   if (tasks.some((t) => t.id === c.taskId)) throw new Error('This task is already active.')
-  if (!categories.some((cat) => cat.id === c.snapshot.categoryId))
-    throw new Error(`Its category “${c.snapshot.categoryName}” no longer exists, so it can't be restored.`)
+  const categoryId = categoryOverride ?? c.snapshot.categoryId
+  if (!categories.some((cat) => cat.id === categoryId)) throw new CategoryGoneError(c.snapshot.categoryName)
   const s = c.snapshot
   const input = {
-    title: s.title, notes: s.notes, priority: s.priority, categoryId: s.categoryId, ongoing: s.ongoing,
+    title: s.title, notes: s.notes, priority: s.priority, categoryId, ongoing: s.ongoing,
     dueDate: s.dueDate, checklist: s.checklist, recurrence: s.recurrence,
   }
   // Reattach under the original parent when it still exists and the result is
@@ -141,6 +172,16 @@ export function planRestore(tasks: Task[], categories: Category[], c: Completion
   cs.inserts.push({ ...r.value, id: c.taskId, createdAt: env.now() })
   cs.historyDeletes.push(c.id)
   return cs
+}
+
+/** Restoring needs a category choice: the original was deleted. */
+export class CategoryGoneError extends Error {
+  categoryName: string
+  constructor(categoryName: string) {
+    super(`Its category “${categoryName}” no longer exists — choose another to restore it.`)
+    this.name = 'CategoryGoneError'
+    this.categoryName = categoryName
+  }
 }
 
 /** Why a restore didn't reattach under its original parent (null if it did or had none). */
@@ -181,10 +222,16 @@ export function planDeleteHistory(completionId: string): ChangeSet {
   return cs
 }
 
-/** Replace a task's editable fields with validated ones. */
-export function planUpdate(existing: Task, value: Omit<Task, 'id' | 'createdAt'>): ChangeSet {
+/**
+ * Replace a task's editable fields with validated ones. When the task moves to
+ * a different nesting level, its whole subtree's depths shift with it
+ * (parents first, so each row still matches its parent in the database).
+ */
+export function planUpdate(existing: Task, value: Omit<Task, 'id' | 'createdAt'>, tasks: Task[] = []): ChangeSet {
   const cs = emptyChangeSet()
   cs.updates.push({ ...existing, ...value })
+  const shift = value.depth - existing.depth
+  if (shift) for (const d of descendantsOf(tasks, existing.id)) cs.updates.push({ ...d, depth: d.depth + shift })
   return cs
 }
 

@@ -1,4 +1,5 @@
 import { diffDays, isValidISODate } from './dates'
+import { subtreeHeight } from './placement'
 import { MAX_DEPTH, type Category, type ChecklistItem, type ISODate, type Task } from './types'
 
 /** What a form submits. Loose types on purpose: validation decides. */
@@ -80,6 +81,8 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
     else if (ctx.selfId && isSelfOrDescendant(ctx.tasks, ctx.selfId, parent.id))
       errors.parentId = 'A task cannot be nested under itself.'
     else if (parent.depth + 1 > MAX_DEPTH) errors.parentId = `Subtasks can nest at most ${MAX_DEPTH} levels deep.`
+    else if (ctx.selfId && parent.depth + 1 + subtreeHeight(ctx.tasks, ctx.selfId) > MAX_DEPTH)
+      errors.parentId = `Moving it there would nest its subtasks more than ${MAX_DEPTH} levels deep.`
     else {
       parentId = parent.id
       depth = parent.depth + 1
@@ -156,10 +159,10 @@ export function validateQuickAdd(rows: QuickAddRow[], ctx: ValidationContext): Q
 }
 
 /** Validate a new category name. Returns an error message or null. */
-export function validateCategoryName(name: string, existing: Category[]): string | null {
+export function validateCategoryName(name: string, existing: Category[], selfId?: string): string | null {
   const n = name.trim()
   if (!n) return 'Category name is required.'
   if (n.length > 60) return 'Category name is too long (max 60 characters).'
-  if (existing.some((c) => c.name.toLowerCase() === n.toLowerCase())) return `“${n}” already exists.`
+  if (existing.some((c) => c.id !== selfId && c.name.toLowerCase() === n.toLowerCase())) return `“${n}” already exists.`
   return null
 }

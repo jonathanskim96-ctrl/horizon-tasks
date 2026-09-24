@@ -8,14 +8,15 @@ const iso = (k = 0) => { const d = new Date(); d.setDate(d.getDate() + k); retur
 const results = []
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
 
-async function scenario(name, fn, { signedOut = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' })
+async function scenario(name, fn, { signedOut = false, serviceWorker = false } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: serviceWorker ? 'allow' : 'block' })
   const page = await ctx.newPage()
   const mock = createMock()
   const errors = []
   page.on('pageerror', (e) => !/surprise failure/.test(e.message) && errors.push(e.message))
   page.on('console', (m) => m.type() === 'error' && !/Content Security Policy|Failed to load resource/.test(m.text()) && errors.push(m.text()))
   await page.route('http://mock.supabase.local/**', mock.handler)
+  await page.routeWebSocket(/mock\.supabase\.local\/realtime/, mock.realtime)
   if (!signedOut) await page.addInitScript((s) => { try { localStorage.setItem('sb-mock-auth-token', s) } catch {} }, session('11111111-1111-1111-1111-111111111111'))
   try {
     await fn({ page, mock, ctx })
@@ -51,6 +52,8 @@ async function newTask(page, { title, p = 'P3', cat = 'Admin', due = iso(), fore
   await page.getByRole('button', { name: 'Save' }).click()
 }
 const row = (page, text) => page.locator('.task-row', { hasText: text }).first()
+/** Row whose own title is exactly `title` (not a subtask mentioning it in its breadcrumb). */
+const exactRow = (page, title) => page.locator('.task-row', { has: page.locator('.task-title', { hasText: new RegExp(`^${title}$`) }) }).first()
 
 await scenario('XSS payloads render as inert text everywhere', async ({ page }) => {
   await boot(page)
@@ -123,15 +126,17 @@ await scenario('Server error on save is shown and nothing is lost', async ({ pag
   await page.getByText('Task added.', { exact: true }).waitFor()
 })
 
-await scenario('Network failure on complete is shown', async ({ page, mock }) => {
+await scenario('Connection drops mid-save: the change is kept and synced later', async ({ page, mock }) => {
   await boot(page)
-  await newTask(page, { title: 'Offline one' })
+  await newTask(page, { title: 'Flaky one' })
   await page.getByText('Task added.', { exact: true }).waitFor()
   mock.faults.abortWrite = 1
-  await page.getByRole('button', { name: 'Complete “Offline one”' }).first().click()
-  await page.getByText(/Couldn't save/).waitFor()
-  if (mock.db.tasks.length !== 1) throw new Error('task vanished')
-  await row(page, 'Offline one').waitFor()
+  await page.getByRole('button', { name: 'Complete “Flaky one”' }).first().click()
+  await page.getByText('1 to sync').waitFor()
+  if (await row(page, 'Flaky one').count()) throw new Error('not shown as completed locally')
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await page.waitForFunction(() => !document.querySelector('.pending-chip'))
+  if (mock.db.completions.length !== 1 || mock.db.tasks.length !== 0) throw new Error(`db: ${mock.db.completions.length} completions, ${mock.db.tasks.length} tasks`)
 })
 
 await scenario('Load failure shows error with working Retry', async ({ page, mock }) => {
@@ -516,18 +521,179 @@ await scenario('Sign out clears the session from the device', async ({ page }) =
   if (await page.getByText('Due today').count()) throw new Error('data still visible')
 })
 
-await scenario('Offline: clear banner, plain-English errors, recovers when back online', async ({ page, mock, ctx }) => {
+await scenario('Offline editing: changes apply now, queue in order, sync on reconnect', async ({ page, mock, ctx }) => {
+  mock.seed([{ id: U(1), title: 'Existing', due_date: iso(0) }])
   await boot(page)
-  await newTask(page, { title: 'Net test' })
-  await page.getByText('Task added.', { exact: true }).waitFor()
+  mock.faults.offline = true
   await ctx.setOffline(true)
   await page.getByText("You're offline").waitFor()
-  mock.faults.abortWrite = 1
-  await page.getByRole('button', { name: 'Complete “Net test”' }).first().click()
-  await page.getByText("Can't reach the server — you may be offline.").waitFor()
+  await newTask(page, { title: 'Made offline' })
+  await page.getByText('Task added.', { exact: true }).waitFor()
+  await row(page, 'Made offline').click()
+  await page.getByRole('button', { name: 'Complete', exact: true }).click()
+  await page.getByText('Completed.', { exact: true }).waitFor()
+  await row(page, 'Existing').click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await dlg(page).locator('input[type=text]').first().fill('Existing (edited offline)')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('Task updated.').waitFor()
+  await page.getByText('3 to sync').waitFor()
+  if (mock.calls.apply !== 0) throw new Error('sent while offline')
+  // Category changes need a connection and say so.
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Categories' }).click()
+  await page.getByRole('button', { name: 'Edit category Admin' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('needs a connection').waitFor()
+  await page.keyboard.press('Escape')
+  mock.faults.offline = false
   await ctx.setOffline(false)
-  await page.waitForFunction(() => !document.querySelector('.offline-banner'))
+  await page.waitForFunction(() => !document.querySelector('.pending-chip'), null, { timeout: 15000 })
+  const hist = mock.db.completions.map((c) => c.snapshot.title)
+  const titles = mock.db.tasks.map((t) => t.title)
+  if (mock.calls.apply !== 3 || hist.join() !== 'Made offline' || titles.join() !== 'Existing (edited offline)') throw new Error(JSON.stringify({ calls: mock.calls.apply, hist, titles }))
 })
+
+await scenario('Offline conflict: a change that lost to another device is undone and reported', async ({ page, mock, ctx }) => {
+  mock.seed([{ id: U(1), title: 'Contested', due_date: iso(0) }])
+  await boot(page)
+  mock.faults.offline = true
+  await ctx.setOffline(true)
+  await page.getByRole('button', { name: 'Complete “Contested”' }).first().click()
+  await page.getByText('1 to sync').waitFor()
+  mock.db.tasks = [] // meanwhile the phone deleted it
+  mock.faults.offline = false
+  await ctx.setOffline(false)
+  await page.getByText(/couldn't be synced/).waitFor({ timeout: 15000 })
+  await page.getByText(/Couldn't sync “complete “Contested””/).waitFor()
+  if (mock.db.completions.length) throw new Error('conflicting change was applied')
+})
+
+await scenario('Sign out with unsynced changes asks first', async ({ page, mock, ctx }) => {
+  await boot(page)
+  mock.faults.offline = true
+  await ctx.setOffline(true)
+  await newTask(page, { title: 'Unsynced' })
+  await page.getByText('1 to sync').waitFor()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByText("haven't reached the server yet").waitFor()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await page.getByText('1 to sync').waitFor()
+})
+
+await scenario('Live sync: a change on another device appears without refreshing', async ({ page, mock }) => {
+  await boot(page)
+  await page.waitForFunction(() => true)
+  for (let i = 0; i < 50 && !mock.joined(); i++) await page.waitForTimeout(100)
+  if (!mock.joined()) throw new Error('realtime channel never joined')
+  // The phone adds a task directly in the database, then realtime says so.
+  mock.db.tasks.push({ id: U(77), title: 'Added on phone', notes: '', priority: 3, category_id: mock.db.categories[0].id, ongoing: false, due_date: iso(0), checklist: [], parent_id: null, depth: 0, recurrence_every_n_days: null, recurrence_end_date: null, created_at: new Date().toISOString() })
+  const t0 = Date.now()
+  mock.pushChange('tasks')
+  await row(page, 'Added on phone').waitFor({ timeout: 5000 })
+  if (Date.now() - t0 > 3000) throw new Error('too slow: ' + (Date.now() - t0))
+})
+
+await scenario('Categories: rename, recolor, delete-with-move; history keeps old names', async ({ page, mock }) => {
+  mock.seed([{ id: U(1), title: 'Lab task', due_date: iso(1), category_id: 'cat-1' }, { id: U(2), title: 'Done lab', due_date: iso(1), category_id: 'cat-1' }])
+  await boot(page)
+  await page.getByRole('button', { name: 'Complete “Done lab”' }).first().click()
+  await page.getByText('Completed.', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Categories' }).click()
+  await page.getByRole('button', { name: 'Edit category Core Lab' }).click()
+  await dlg(page).getByLabel('Category name', { exact: true }).fill('mph')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('“mph” already exists.').waitFor()
+  await dlg(page).getByLabel('Category name', { exact: true }).fill('Research <i>lab</i>')
+  await page.getByRole('radio', { name: 'Color #d6688f' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('Category saved.').waitFor()
+  const cat = mock.db.categories.find((c) => c.id === 'cat-1')
+  if (cat.name !== 'Research <i>lab</i>' || cat.color !== '#d6688f') throw new Error(JSON.stringify(cat))
+  // Delete it: its active task must be moved first.
+  await page.getByRole('button', { name: 'Delete category Research <i>lab</i>' }).click()
+  await page.getByText('Its 1 active task(s) will move').waitFor()
+  await page.getByRole('button', { name: 'Move & delete' }).click()
+  await page.getByText('Choose where its tasks should go.').waitFor()
+  await dlg(page).getByLabel('Move tasks to').selectOption({ label: 'Admin' })
+  await page.getByRole('button', { name: 'Move & delete' }).click()
+  await page.getByText(/Moved 1 task\(s\) and deleted/).waitFor()
+  if (mock.db.categories.some((c) => c.id === 'cat-1')) throw new Error('not deleted')
+  if (mock.db.tasks.find((t) => t.id === U(1)).category_id !== 'cat-3') throw new Error('task not moved')
+  if (await page.locator('i').count()) throw new Error('HTML rendered from category name')
+  // History still shows the name at completion time, and restore asks for a category.
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.getByRole('button', { name: 'Restore “Done lab”' }).click()
+  await page.getByText('which has been deleted. Restore it into:').waitFor()
+  await dlg(page).getByRole('button', { name: 'KFAM' }).click()
+  await page.getByText('Restored.', { exact: true }).waitFor()
+  if (mock.db.tasks.find((t) => t.title === 'Done lab').category_id !== 'cat-2') throw new Error('restored into wrong category')
+})
+
+await scenario('Move a task (with its subtask) under another parent, and back to top level', async ({ page, mock }) => {
+  mock.seed([
+    { id: U(1), title: 'Project', due_date: iso(10) },
+    { id: U(2), title: 'Loose task', due_date: iso(5) },
+    { id: U(3), title: 'Its step', due_date: iso(4), parent_id: U(2), depth: 1 },
+    { id: U(4), title: 'Short deadline', due_date: iso(1) },
+  ])
+  await boot(page)
+  await page.getByRole('button', { name: 'Weekly' }).click()
+  await page.getByRole('button', { name: 'Monthly' }).click()
+  await exactRow(page, 'Loose task').click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  // Not offered: itself or its own subtask.
+  const opts = await dlg(page).getByLabel('Subtask of').locator('option').allTextContents()
+  if (opts.some((o) => /Loose task|Its step/.test(o))) throw new Error('offered self/descendant: ' + opts)
+  await dlg(page).getByLabel('Subtask of').selectOption({ label: `Short deadline (due ${iso(1)})` })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText(/can't be due after its parent/).waitFor()
+  await dlg(page).getByLabel('Subtask of').selectOption({ label: `Project (due ${iso(10)})` })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('Moved under “Project”.').waitFor()
+  const t = (id) => mock.db.tasks.find((x) => x.id === id)
+  if (t(U(2)).parent_id !== U(1) || t(U(2)).depth !== 1 || t(U(3)).depth !== 2) throw new Error(JSON.stringify([t(U(2)), t(U(3))]))
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  await dlg(page).getByLabel('Subtask of').selectOption('')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('Moved to the top level.').waitFor()
+  if (t(U(2)).parent_id !== null || t(U(2)).depth !== 0 || t(U(3)).depth !== 1) throw new Error('not moved back')
+})
+
+await scenario('Recurring subtask past its parent: next occurrence becomes top-level', async ({ page, mock }) => {
+  mock.seed([
+    { id: U(1), title: 'Semester', due_date: iso(3) },
+    { id: U(2), title: 'Weekly reading', due_date: iso(1), parent_id: U(1), depth: 1, recurrence_every_n_days: 7 },
+  ])
+  await boot(page)
+  await page.getByRole('button', { name: 'Complete “Weekly reading”' }).first().click()
+  await page.getByText(`Completed — next due ${iso(8)}, as a top-level task (it's past “Semester”).`).waitFor()
+  const next = mock.db.tasks.find((t) => t.title === 'Weekly reading')
+  if (next.parent_id !== null || next.depth !== 0) throw new Error(JSON.stringify(next))
+})
+
+await scenario('Cold start offline: app opens from cache with queued changes, then syncs', async ({ page, mock, ctx }) => {
+  mock.seed([{ id: U(1), title: 'Cached task', due_date: iso(0) }])
+  await boot(page)
+  await page.waitForFunction(() => navigator.serviceWorker?.ready.then(() => true))
+  await page.reload() // let the service worker take control
+  await page.getByText('Due today', { exact: true }).waitFor()
+  mock.faults.offline = true
+  await ctx.setOffline(true)
+  await newTask(page, { title: 'Queued before closing' })
+  await page.getByText('1 to sync').waitFor()
+  await page.waitForTimeout(300) // let the cache write land
+  await page.reload() // "closing and reopening the app" with no connection
+  await row(page, 'Cached task').waitFor()
+  await row(page, 'Queued before closing').waitFor()
+  await page.getByText('1 to sync').waitFor()
+  await page.getByText("You're offline").waitFor()
+  mock.faults.offline = false
+  await ctx.setOffline(false)
+  await page.waitForFunction(() => !document.querySelector('.pending-chip'), null, { timeout: 15000 })
+  if (!mock.db.tasks.some((t) => t.title === 'Queued before closing')) throw new Error('not synced')
+}, { serviceWorker: true })
 
 await browser.close()
 for (const r of results) console.log(r.join('  '))

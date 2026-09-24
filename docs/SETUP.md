@@ -83,6 +83,10 @@ It creates the four tables the app uses and the security rules that keep them pr
    (stops a task completed on two devices from being recorded twice). Same
    warning → **Run query** → "Success. No rows returned."
 
+11. **And the fifth file**, the same way:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0005_realtime.sql`
+   (turns on instant sync between your devices). → **Run query** → "Success. No rows returned."
+
 Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 

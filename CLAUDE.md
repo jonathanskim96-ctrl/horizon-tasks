@@ -23,8 +23,11 @@ before every push.
 - **Validation:** validate on write in `src/domain/validate.ts`, mirrored by DB
   constraints (types, integer priority, size limits).
 - **Writes:** only through `guardedWrite(key, …)`: task/history changes via
-  `useStore().commit` → `apply_changes` (atomic); category inserts via
-  `useStore().addCategory`. No second guard.
+  `useStore().commit` → `apply_changes` (atomic; queued in the offline outbox
+  when offline); category add/edit/delete via the store's category functions
+  (online only). No second guard.
+- **Device storage:** the offline cache/outbox (IndexedDB, keyed by user id)
+  is wiped on sign-out. Never store anything else sensitive client-side.
 - **Errors:** always surfaced in the UI; never swallowed.
 - **Dependencies:** add only well-known packages. Run `npm audit` after adding one.
 - **CI/workflows:** least-privilege `permissions:`; untrusted values go through `env:`,

@@ -10,7 +10,7 @@ import { VitePWA } from 'vite-plugin-pwa'
  */
 function contentSecurityPolicy(supabaseUrl: string | undefined): Plugin {
   const api = supabaseUrl ? new URL(supabaseUrl) : null
-  const connect = api ? ` ${api.origin} wss://${api.host}` : ''
+  const connect = api ? ` ${api.origin} ${api.protocol === 'http:' ? 'ws' : 'wss'}://${api.host}` : ''
   const policy = [
     "default-src 'self'",
     "script-src 'self'",

@@ -33,6 +33,7 @@ data, forms, handlers, render or storage.
 
 ## Security (see CLAUDE.md for the standing checklist)
 
+- 0005_realtime: tasks/categories/completions in the realtime publication.
 - 0004_stale_write_guard: apply_changes rejects stale deletes/updates atomically.
 - 0003_limits_and_shapes: size limits agree with the client, checklist shape
   constraint, apply_changes batch caps.
@@ -114,9 +115,29 @@ contrast raised to WCAG AA.
 Documented behaviour (open question): a *recurring subtask*'s next occurrence
 keeps its parent even when it lands after the parent's due date.
 
+### Session 4: remaining specs
+
+- **Recurring subtasks (decision):** the next occurrence stays under its
+  parent unless it would be due after it; then it becomes top-level (with its
+  own subtree). A copied subtask past its own repeat end date stops repeating.
+- **Categories:** rename, recolor (palette), add, delete. Deleting one that
+  active tasks use requires choosing where they move (reassign, then delete).
+  History snapshots keep the old name; restoring a task whose category was
+  deleted asks for a category.
+- **Move tasks:** "Subtask of" picker in the form (new + edit). Only valid
+  parents are offered (not itself/its subtree, never deeper than 4 levels);
+  the date rule still applies; the whole subtree's depths shift with it.
+- **Live sync:** Supabase Realtime (migration 0005) → debounced reload on any
+  change to the user's rows; focus + 60 s polling remain as fallback.
+- **Offline editing:** server data cached in IndexedDB (opens offline);
+  writes made offline go to an ordered outbox, show immediately, sync on
+  reconnect. Replays the server rejects are dropped and reported; a send that
+  dropped mid-request is marked "uncertain" so an "already applied" reply
+  counts as success. Category changes/import need a connection. Sign-out
+  wipes the device copy (asks first if changes are unsynced).
+
 ### Known gaps
-Category rename/recolor/delete, moving a task under a different parent,
-instant (realtime) sync (currently on focus + every 60 s), offline editing.
+None from the spec. Possible later polish: category reordering, notifications.
 
 ## Design discipline (each was a real bug before)
 
@@ -184,3 +205,4 @@ instant (realtime) sync (currently on focus + every 60 s), offline editing.
 - 2026-09-24 — Session 2b: test + security pass (contract, attack, mutation, browser suites), 0003, CSP.
 - 2026-09-24 — Session 2c: second verification pass; 5 more fixes, suites extended (20 e2e, 60+ attack checks).
 - 2026-09-24 — Session 3: full feature build; review pass 1 (code) + pass 2 (black-box); 0004.
+- 2026-09-24 — Session 4: recurring-subtask decision, categories, move, realtime, offline editing.

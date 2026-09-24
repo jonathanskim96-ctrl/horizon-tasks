@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
-import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, sortForever, sortTasks, breadcrumb } from './placement'
+import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
 import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
 import { applyLocal, restoreDetachReason, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
@@ -154,6 +154,14 @@ describe('recurrence & actions', () => {
     expect(byTitle.g.parentId).toBe(byTitle.c.id)
     expect(byTitle.c.checklist).toEqual([{ text: 'x', done: false }])
   })
+  it("a copied subtask past its own repeat end date stops repeating", () => {
+    const tasks = [
+      mk({ id: 'r', dueDate: '2026-09-10', recurrence: { everyNDays: 7, endDate: null } }),
+      mk({ id: 'c', parentId: 'r', depth: 1, dueDate: '2026-09-09', recurrence: { everyNDays: 2, endDate: '2026-09-12' } }),
+    ]
+    const clones = cloneSubtree(tasks, tasks[0], '2026-09-17', env)
+    expect(clones[1]).toMatchObject({ dueDate: '2026-09-16', recurrence: null })
+  })
   it('finishing cascades completions + deletes and spawns the next occurrence', () => {
     const tasks = [
       mk({ id: 'r', dueDate: '2026-09-10', recurrence: { everyNDays: 7, endDate: null } }),
@@ -197,6 +205,41 @@ describe('recurrence & actions', () => {
     const tasks = [mk({ id: 'p' }), mk({ id: 'a', parentId: 'p', depth: 1 }), mk({ id: 'b', parentId: 'p', depth: 1 })]
     const cs = planFinish(tasks, cats, 'a', 'completed', env)
     expect(subtaskProgress(tasks.filter((t) => t.id !== 'a'), cs.completions, 'p')).toEqual({ done: 1, total: 2 })
+  })
+})
+
+describe('moving tasks between parents', () => {
+  const tree = () => [
+    mk({ id: 'a', dueDate: '2026-10-30' }),
+    mk({ id: 'b', parentId: 'a', depth: 1, dueDate: '2026-10-20' }),
+    mk({ id: 'b1', parentId: 'b', depth: 2, dueDate: '2026-10-10' }),
+    mk({ id: 'x', dueDate: '2026-10-25' }),
+    mk({ id: 'deep', parentId: 'x', depth: 1, dueDate: '2026-10-25' }),
+    mk({ id: 'deeper', parentId: 'deep', depth: 2, dueDate: '2026-10-25' }),
+    mk({ id: 'deepest', parentId: 'deeper', depth: 3, dueDate: '2026-10-25' }),
+  ]
+  it('moves a subtree and shifts every depth, parents first', () => {
+    const tasks = tree()
+    const b = tasks.find((t) => t.id === 'b')!
+    const v = validateTask({ ...b, parentId: null }, { categories: cats, tasks, selfId: 'b' })
+    expect(v.ok).toBe(true)
+    if (!v.ok) return
+    const cs = planUpdate(b, v.value, tasks)
+    expect(cs.updates.map((t) => [t.id, t.parentId, t.depth])).toEqual([['b', null, 0], ['b1', 'b', 1]])
+  })
+  it('refuses moves that nest the subtree too deep, under itself, or after the new parent', () => {
+    const tasks = tree()
+    const b = tasks.find((t) => t.id === 'b')!
+    const tooDeep = validateTask({ ...b, parentId: 'deepest' }, { categories: cats, tasks, selfId: 'b' })
+    expect(!tooDeep.ok && tooDeep.errors.parentId).toMatch(/levels deep/)
+    const underSelf = validateTask({ ...b, parentId: 'b1' }, { categories: cats, tasks, selfId: 'b' })
+    expect(!underSelf.ok && underSelf.errors.parentId).toMatch(/under itself/)
+    const late = validateTask({ ...tasks.find((t) => t.id === 'a')!, parentId: 'x' }, { categories: cats, tasks, selfId: 'a' })
+    expect(!late.ok && late.errors.dueDate).toMatch(/after its parent/)
+  })
+  it('offers only valid parents', () => {
+    const ids = parentCandidates(tree(), 'b', 4).map((t) => t.id).sort()
+    expect(ids).toEqual(['a', 'deep', 'deeper', 'x']) // not itself, its child, or 'deepest' (too deep)
   })
 })
 

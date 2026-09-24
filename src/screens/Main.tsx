@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { signOut } from '../auth/useSession'
 import { useStore } from '../data/useStore'
 import { BusyError } from '../data/writeGuard'
-import { nextOccurrenceDate, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist, restoreDetachReason } from '../domain/actions'
+import { CategoryGoneError, nextOccurrenceDate, occurrenceParent, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist, restoreDetachReason } from '../domain/actions'
+import { safeColor } from '../domain/categories'
+import { CategoriesSheet } from '../ui/CategoriesSheet'
 import { todayISO } from '../domain/dates'
 import { toCSV, toExportJSON } from '../domain/exporting'
 import { descendantsOf, isOverdue } from '../domain/placement'
@@ -11,7 +13,7 @@ import { downloadText } from '../ui/download'
 import { ImportSheet } from '../ui/ImportSheet'
 import { OverduePopup } from '../ui/OverduePopup'
 import { QuickAdd } from '../ui/QuickAdd'
-import { ErrorBanner } from '../ui/Sheet'
+import { ErrorBanner, Sheet } from '../ui/Sheet'
 import { Confirm, TaskDetail } from '../ui/TaskDetail'
 import { TaskForm } from '../ui/TaskForm'
 import { Daily } from './Daily'
@@ -40,6 +42,9 @@ type SheetState =
   | { kind: 'overdue' }
   | { kind: 'quickAdd' }
   | { kind: 'import' }
+  | { kind: 'categories' }
+  | { kind: 'confirmSignOut' }
+  | { kind: 'restorePick'; completionId: string }
   | null
 
 /** The active task a sheet is about, if any (History/overdue/quick-add sheets have none). */
@@ -72,8 +77,8 @@ function useToday() {
   return today
 }
 
-export function Main({ email }: { email: string }) {
-  const store = useStore()
+export function Main({ email, userId }: { email: string; userId: string }) {
+  const store = useStore(userId)
   const { data } = store
   const today = useToday()
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -92,14 +97,10 @@ export function Main({ email }: { email: string }) {
     if (data.tasks.some((t) => isOverdue(t, today))) setSheet((s) => s ?? { kind: 'overdue' })
   }
 
-  // Offline banner; coming back online refreshes automatically.
+  // Offline banner (the store itself syncs when the connection returns).
   const [online, setOnline] = useState(() => navigator.onLine)
-  const { reload } = store
   useEffect(() => {
-    const up = () => {
-      setOnline(true)
-      void reload()
-    }
+    const up = () => setOnline(true)
     const down = () => setOnline(false)
     window.addEventListener('online', up)
     window.addEventListener('offline', down)
@@ -107,7 +108,7 @@ export function Main({ email }: { email: string }) {
       window.removeEventListener('online', up)
       window.removeEventListener('offline', down)
     }
-  }, [reload])
+  }, [])
 
   useEffect(() => {
     if (!toast) return
@@ -126,7 +127,8 @@ export function Main({ email }: { email: string }) {
   const unmarkOwnRemovals = (ids: string[]) => setOwnRemovals((s) => new Set([...s].filter((id) => !ids.includes(id))))
   const sheetTaskGone =
     !!data && !!sheetTaskId && !data.tasks.some((t) => t.id === sheetTaskId) && !ownRemovals.has(sheetTaskId)
-  const historyGone = sheet?.kind === 'confirmHistoryDelete' && !!data && !data.completions.some((c) => c.id === sheet.completionId)
+  const historyGone =
+    (sheet?.kind === 'confirmHistoryDelete' || sheet?.kind === 'restorePick') && !!data && !data.completions.some((c) => c.id === sheet.completionId)
   if (historyGone) setSheet(null)
   if (sheetTaskGone) {
     // React's "adjust state during render" pattern (no effect round-trip).
@@ -148,7 +150,12 @@ export function Main({ email }: { email: string }) {
       await store.commit(`${outcome}:${t.id}`, cs)
       const next = nextOccurrenceDate(t)
       const verb = outcome === 'completed' ? 'Completed' : 'Marked not needed'
-      setToast(next ? `${verb} — next due ${next}.` : `${verb}.`)
+      const moved = next ? occurrenceParent(data.tasks, t, next).detachedFrom : null
+      setToast(
+        next
+          ? `${verb} — next due ${next}${moved ? `, as a top-level task (it's past “${moved.title}”)` : ''}.`
+          : `${verb}.`,
+      )
       setActionError(null)
       return true
     } catch (e) {
@@ -169,18 +176,20 @@ export function Main({ email }: { email: string }) {
     if (await finishNow(t, 'completed')) setSheet(null)
   }
 
-  const restore = async (c: Completion) => {
+  const restore = async (c: Completion, categoryOverride?: string) => {
     if (!data) return
     try {
-      const cs = planRestore(data.tasks, data.categories, c)
+      const cs = planRestore(data.tasks, data.categories, c, undefined, categoryOverride)
       await store.commit(`restore:${c.id}`, cs)
       const restored = cs.inserts[0]
       const parent = restored.parentId ? data.tasks.find((t) => t.id === restored.parentId) : undefined
       const detached = restoreDetachReason(data.tasks, c, restored)
       setToast(parent ? `Restored under “${parent.title}”.` : detached ? `Restored as a top-level task — ${detached}.` : 'Restored.')
       setActionError(null)
+      if (sheet?.kind === 'restorePick') setSheet(null)
     } catch (e) {
-      report(e)
+      if (e instanceof CategoryGoneError && !categoryOverride) setSheet({ kind: 'restorePick', completionId: c.id })
+      else report(e)
     }
   }
 
@@ -195,6 +204,16 @@ export function Main({ email }: { email: string }) {
       report(e)
     } finally {
       setBusy(false)
+    }
+  }
+
+  /** Sign out and wipe this user's cached data from the device. */
+  const doSignOut = async () => {
+    try {
+      await store.clearDevice()
+      await signOut()
+    } catch (e) {
+      setActionError((e as Error).message)
     }
   }
 
@@ -263,6 +282,11 @@ export function Main({ email }: { email: string }) {
           <h1>Horizon</h1>
           <span className="tag">tasks</span>
         </div>
+        {store.pending > 0 && (
+          <span className="pending-chip" role="status" title="Saved on this device; will sync when online">
+            {store.pending} to sync
+          </span>
+        )}
         {overdueCount > 0 && (
           <button className="overdue-pill" onClick={() => setSheet({ kind: 'overdue' })}>
             <span className="dot" />
@@ -279,8 +303,26 @@ export function Main({ email }: { email: string }) {
         ))}
       </nav>
 
-      {!online && <div className="offline-banner" role="status">You're offline — you can look around, but changes can't be saved until you reconnect.</div>}
-      {store.loadError && <ErrorBanner message={`Sync problem: ${store.loadError}`} onRetry={store.reload} />}
+      {!online && (
+        <div className="offline-banner" role="status">
+          You're offline. Changes are saved on this device and will sync when you reconnect.
+        </div>
+      )}
+      {store.syncProblems.length > 0 && (
+        <div className="error" role="alert">
+          {store.syncProblems.length === 1 ? 'An offline change' : `${store.syncProblems.length} offline changes`} couldn't be synced and
+          {store.syncProblems.length === 1 ? ' was' : ' were'} undone:
+          <ul className="small">
+            {store.syncProblems.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+          <button className="link" onClick={store.dismissSyncProblems}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {online && store.loadError && <ErrorBanner message={`Sync problem: ${store.loadError}`} onRetry={store.reload} />}
       {actionError && !sheet && (
         <div className="error" role="alert">
           {actionError}
@@ -313,7 +355,11 @@ export function Main({ email }: { email: string }) {
 
       <footer className="footer muted small">
         {email} ·{' '}
-        <button className="link" onClick={() => signOut().catch((e: Error) => setActionError(e.message))}>
+        <button className="link" onClick={() => setSheet({ kind: 'categories' })}>
+          Categories
+        </button>{' '}
+        ·{' '}
+        <button className="link" onClick={() => (store.pending ? setSheet({ kind: 'confirmSignOut' }) : void doSignOut())}>
           Sign out
         </button>
       </footer>
@@ -427,6 +473,49 @@ export function Main({ email }: { email: string }) {
           }}
         />
       )}
+
+      {sheet?.kind === 'confirmSignOut' && (
+        <Confirm
+          title="Sign out with unsynced changes?"
+          body={
+            <p>
+              {store.pending} change(s) made offline haven't reached the server yet. Signing out now discards them from this device.
+              Connect to the internet first to keep them.
+            </p>
+          }
+          confirmLabel="Discard and sign out"
+          danger
+          onConfirm={() => void doSignOut()}
+          onCancel={close}
+        />
+      )}
+
+      {sheet?.kind === 'categories' && <CategoriesSheet data={data} store={store} onClose={close} onToast={setToast} />}
+
+      {sheet?.kind === 'restorePick' && data.completions.some((c) => c.id === sheet.completionId) && (() => {
+        const c = data.completions.find((x) => x.id === sheet.completionId)!
+        return (
+          <Sheet title="Choose a category" onClose={close}>
+            {actionError && <ErrorBanner message={actionError} />}
+            <p>
+              “{c.snapshot.title}” was in “{c.snapshot.categoryName}”, which has been deleted. Restore it into:
+            </p>
+            <div className="pill-row">
+              {data.categories.map((cat) => (
+                <button key={cat.id} className="pill cat-pill" onClick={() => void restore(c, cat.id)}>
+                  <span className="cat-dot" style={{ background: safeColor(cat.color) }} />
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+            <div className="btn-row">
+              <button className="btn" onClick={close}>
+                Cancel
+              </button>
+            </div>
+          </Sheet>
+        )
+      })()}
 
       {sheet?.kind === 'confirmHistoryDelete' && data.completions.some((c) => c.id === sheet.completionId) && (
         <Confirm
