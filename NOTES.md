@@ -33,6 +33,8 @@ data, forms, handlers, render or storage.
 
 ## Security (see CLAUDE.md for the standing checklist)
 
+- 0003_limits_and_shapes: size limits agree with the client, checklist shape
+  constraint, apply_changes batch caps.
 - 0002_hardening: `anon` has no table/function access; history has no UPDATE
   privilege; `strict_int` pins search_path; size limits (title 500, notes 20k,
   checklist ≤100 items/64KB, category name 60, snapshot 128KB).
@@ -40,6 +42,30 @@ data, forms, handlers, render or storage.
 - Supabase's "destructive operations" warning on 0001/0002 is triggered by the
   words `delete`/`revoke`; neither file removes data.
 - After first sign-in: disable new sign-ups and the Email provider (SETUP Part 7).
+
+### Security audit (session 2)
+
+Methods: code review against CLAUDE.md; 30+ scripted attacks in
+`supabase/tests/attack_test.sql` (cross-user read/write/delete/nesting,
+identity spoofing, type confusion, injection, oversized batches, anon access);
+mutation testing (deliberately removing RLS / trigger / constraints / grants —
+each is caught by a named attack check); app↔DB contract test
+(`supabase/tests/contract.test.ts`) with real planner payloads; browser attack
+tests (XSS in every field, CSP injection + exfiltration, clickjacking); full
+git-history secret scan; `npm audit`.
+
+Found and fixed:
+- **Size-limit mismatch** (bug): checklist/snapshot DB limits were byte-based and
+  smaller than what the app allows with multi-byte text, so such tasks couldn't
+  be saved or completed. 0003 raises them; the contract test proves agreement.
+- **Checklist shape** was unchecked in the DB (malformed items could crash
+  rendering): 0003 adds a shape constraint; the client also normalizes rows.
+- **Batch caps**: apply_changes rejects non-array args and batches > 1000.
+- **CSP** added to production builds (only own scripts; network only to self +
+  Supabase). **Frame-busting** since GitHub Pages can't send frame headers.
+- **Sync race**: a reload that started before a write could overwrite it with
+  stale data; such reloads are now discarded.
+- Subtasks no longer pre-fill the parent's category (spec: no default).
 
 ## Design discipline (each was a real bug before)
 
@@ -104,3 +130,4 @@ data, forms, handlers, render or storage.
 - 2026-09-24 — GitHub Pages auto-deploy; setup guide rewritten browser-only.
 - 2026-09-24 — Security pass: 0002_hardening, PKCE, size limits, safeColor, CLAUDE.md checklist.
 - 2026-09-24 — Session 2: Dashboard, Daily, Forever, task form, detail, complete/delete flows.
+- 2026-09-24 — Session 2b: test + security pass (contract, attack, mutation, browser suites), 0003, CSP.

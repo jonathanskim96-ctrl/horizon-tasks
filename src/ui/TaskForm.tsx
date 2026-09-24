@@ -23,7 +23,7 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
   const [title, setTitle] = useState(editing?.title ?? '')
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [priority, setPriority] = useState<number | null>(editing?.priority ?? null)
-  const [categoryId, setCategoryId] = useState(editing?.categoryId ?? parent?.categoryId ?? '')
+  const [categoryId, setCategoryId] = useState(editing?.categoryId ?? '')
   const [ongoing, setOngoing] = useState(editing?.ongoing ?? false)
   const [dueDate, setDueDate] = useState(editing?.dueDate ?? presetDue ?? '')
   const [repeat, setRepeat] = useState(!!editing?.recurrence)

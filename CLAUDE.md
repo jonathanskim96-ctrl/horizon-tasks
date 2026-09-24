@@ -34,4 +34,9 @@ before every push.
 
 ## Checks before every push
 
-`npm run typecheck && npm run lint && npm test && npm run build && ./supabase/tests/run.sh`
+`npm run typecheck && npm run lint && npm test && npm run build && ./supabase/tests/run.sh && npm run e2e`
+
+- `supabase/tests/run.sh`: migrations + RLS checks + attack suite + app↔DB contract test.
+- `npm run e2e`: browser suite (mocked Supabase, production build with CSP).
+- Any new table/function/field: add attack checks. Any new user-visible text
+  field: add it to the XSS scenario in `e2e/suite.mjs`.

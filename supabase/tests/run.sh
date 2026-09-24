@@ -13,3 +13,6 @@ PSQL="psql -h $DIR -p 54329 -U postgres -v ON_ERROR_STOP=1 -q"
 $PSQL -f auth_shim.sql
 for f in ../migrations/*.sql; do $PSQL -f "$f"; done
 $PSQL -f rls_test.sql
+$PSQL -f attack_test.sql
+# App ↔ DB contract test (real payloads from the TypeScript planners).
+(cd ../.. && PGHOST="$DIR" PGPORT=54329 npx vitest run supabase/tests/contract.test.ts)

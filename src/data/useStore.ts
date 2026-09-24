@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyLocal } from '../domain/actions'
 import { nextCategoryColor } from '../domain/categories'
 import type { Category, ChangeSet, Snapshot } from '../domain/types'
@@ -10,10 +10,16 @@ import { guardedWrite } from './writeGuard'
 export function useStore() {
   const [data, setData] = useState<Snapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Bumped on every successful write. A reload that started before a write
+  // finished would overwrite it with stale data, so such results are dropped.
+  const writes = useRef(0)
 
   const reload = useCallback(async () => {
+    const startedAt = writes.current
     try {
-      setData(await loadAll())
+      const snap = await loadAll()
+      if (writes.current !== startedAt) return
+      setData(snap)
       setLoadError(null)
     } catch (e) {
       setLoadError((e as Error).message)
@@ -47,6 +53,7 @@ export function useStore() {
     (key: string, cs: ChangeSet) =>
       guardedWrite(key, async () => {
         await applyChanges(cs)
+        writes.current++
         setData((d) => (d ? applyLocal(d, cs) : d))
       }),
     [],
@@ -58,6 +65,7 @@ export function useStore() {
         const err = validateCategoryName(name, existing)
         if (err) throw new Error(err)
         const cat = await createCategory(name.trim(), nextCategoryColor(existing), existing.length)
+        writes.current++
         setData((d) => (d ? { ...d, categories: [...d.categories, cat] } : d))
         return cat
       }),

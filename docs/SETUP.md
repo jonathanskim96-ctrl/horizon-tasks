@@ -72,6 +72,12 @@ It creates the four tables the app uses and the security rules that keep them pr
    It may show the same warning, because it removes permissions. Click **Run query**.
    Expect **"Success. No rows returned."**
 
+9. **And the third file**, the same way:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0003_limits_and_shapes.sql`
+   (fixes size limits for long non-English text, stricter data checks). Expect
+   the same warning (it replaces a function and two limits) → **Run query** →
+   "Success. No rows returned."
+
 Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 
