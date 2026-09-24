@@ -21,6 +21,8 @@ npm run typecheck && npm run lint && npm test
 
 ## One-time backend setup
 
+Full step-by-step walkthrough: [`docs/SETUP.md`](docs/SETUP.md). Summary:
+
 1. **Supabase project** → SQL Editor → run each file in `supabase/migrations/` in order.
 2. **Google OAuth client** (Google Cloud Console → APIs & Services → Credentials):
    type *Web application*; authorized redirect URI

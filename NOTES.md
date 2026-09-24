@@ -41,11 +41,11 @@ data, forms, handlers, render or storage.
 - Errors always shown in the UI (`ErrorBanner`); data-layer helpers throw.
 - Dates: `YYYY-MM-DD` local-day for due dates; timestamps UTC, shown in America/Los_Angeles.
 
-## Assumptions made (confirm or correct)
+## Confirmed decisions (2026-09-24)
 
 1. **Max depth**: top-level is depth 0; subtasks allowed down to depth 4 (5 levels total).
 2. **Ongoing tasks with a due date** also appear in Daily/Weekly/Monthly (only
-   Later excludes them explicitly).
+   Later excludes them).
 3. **Subtask due after parent**: save is refused with an inline message naming
    the parent's date (nothing is moved automatically).
 4. **Monthly list window**: today through today+30 inclusive.
@@ -54,11 +54,17 @@ data, forms, handlers, render or storage.
 6. **Cascade-completing a parent** records each descendant with the parent's
    outcome and does *not* separately advance a descendant's own recurrence.
    (A recurring subtask completed directly does advance, as a sibling.)
-7. Starter category colors are placeholders until the real hexes are provided.
+7. **Categories**: starters use the artifact's exact colors (MPH #5b8cff,
+   Core Lab #34c2b0, KFAM #f2b84b, Admin #a687f0, Financial #4caf7d) plus
+   **Other #8b929c** (neutral grey, outside the palette). Custom-category
+   palette is the artifact's 10 colors.
+8. **Build order**: Dashboard + Daily with full task form and Complete → overdue
+   popup + History → Weekly/Monthly/Forever/Later → Quick Add → export → import.
+9. Visual theme: the artifact's dark palette (tokens in `src/index.css`).
 
 ## Open items
 
-- Supabase project + Google OAuth client (user) — see README.
+- Supabase project + Google OAuth client (user) — step-by-step in `docs/SETUP.md`.
 - Hosting (Vercel/Netlify) — decide at deploy time.
 - Import from the v4 artifact — once schema is live, via backend, never via repo.
 - PWA icons: currently only the SVG favicon; add 192/512 PNGs + maskable before install testing.
@@ -67,3 +73,4 @@ data, forms, handlers, render or storage.
 
 - 2026-09-24 — Session 1: scaffold, schema v1 + SQL tests, domain logic + 24
   unit tests, Google sign-in wiring, minimal signed-in shell.
+- 2026-09-24 — Assumptions confirmed; real category colors + "Other"; dark theme; `docs/SETUP.md`.

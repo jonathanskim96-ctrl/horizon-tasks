@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Horizon Tasks',
         short_name: 'Horizon',
         description: 'Personal task planner across daily, weekly, monthly and forever horizons.',
-        theme_color: '#1f2937',
-        background_color: '#ffffff',
+        theme_color: '#111317',
+        background_color: '#111317',
         display: 'standalone',
         start_url: '/',
         icons: [
