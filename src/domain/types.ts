@@ -64,6 +64,13 @@ export interface Completion {
   snapshot: TaskSnapshot
 }
 
+/** Everything the app holds in memory for the signed-in user. */
+export interface Snapshot {
+  tasks: Task[]
+  categories: Category[]
+  completions: Completion[]
+}
+
 /** A batch of writes applied atomically by the `apply_changes` RPC. */
 export interface ChangeSet {
   inserts: Task[]

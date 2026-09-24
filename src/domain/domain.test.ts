@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
 import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, sortForever, sortTasks, breadcrumb } from './placement'
-import { validateQuickAdd, validateTask } from './validate'
-import { cloneSubtree, nextOccurrenceDate, planDelete, planFinish, planRestore, subtaskProgress, type Env } from './actions'
+import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
+import { applyLocal, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
-import type { Category, Task } from './types'
+import type { Category, Snapshot, Task } from './types'
 
 const cats: Category[] = [{ id: 'c1', name: 'Admin', color: '#ea580c', sortOrder: 0 }]
 let seq = 0
@@ -54,6 +54,19 @@ describe('validation', () => {
     if (!r.ok) expect(r.errors.dueDate).toMatch(/after its parent/)
     const ok = validateTask({ title: 'x', priority: 3, categoryId: 'c1', dueDate: '2026-09-30', parentId: 'p' }, ctx)
     expect(ok.ok && ok.value.depth).toBe(1)
+  })
+  it('blocks moving a parent earlier than its subtasks', () => {
+    const tasks = [mk({ id: 'p', dueDate: '2026-09-30' }), mk({ id: 'c', parentId: 'p', depth: 1, dueDate: '2026-09-28' })]
+    const r = validateTask({ title: 'p', priority: 3, categoryId: 'c1', dueDate: '2026-09-27' }, { categories: cats, tasks, selfId: 'p' })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.dueDate).toMatch(/Subtask “c”/)
+    expect(validateTask({ title: 'p', priority: 3, categoryId: 'c1', dueDate: '2026-09-28' }, { categories: cats, tasks, selfId: 'p' }).ok).toBe(true)
+  })
+  it('validates category names', () => {
+    expect(validateCategoryName('  ', cats)).toMatch(/required/)
+    expect(validateCategoryName('admin', cats)).toMatch(/already exists/)
+    expect(validateCategoryName('x'.repeat(61), cats)).toMatch(/too long/)
+    expect(validateCategoryName('Gym', cats)).toBe(null)
   })
   it('enforces max depth', () => {
     const deep = mk({ id: 'd', depth: 4, parentId: 'x' })
@@ -171,6 +184,26 @@ describe('recurrence & actions', () => {
     const tasks = [mk({ id: 'p' }), mk({ id: 'a', parentId: 'p', depth: 1 }), mk({ id: 'b', parentId: 'p', depth: 1 })]
     const cs = planFinish(tasks, cats, 'a', 'completed', env)
     expect(subtaskProgress(tasks.filter((t) => t.id !== 'a'), cs.completions, 'p')).toEqual({ done: 1, total: 2 })
+  })
+})
+
+describe('local state', () => {
+  it('create, update, toggle and finish round-trip through applyLocal', () => {
+    let s: Snapshot = { tasks: [], categories: cats, completions: [] }
+    const v = { title: 'a', notes: '', priority: 2, categoryId: 'c1', ongoing: false, dueDate: TODAY, checklist: [{ text: 'x', done: false }], parentId: null, depth: 0, recurrence: null }
+    s = applyLocal(s, planCreate(v, env))
+    const t = s.tasks[0]
+    expect(t).toMatchObject({ title: 'a', createdAt: env.now() })
+    s = applyLocal(s, planUpdate(t, { ...v, title: 'b' }))
+    expect(s.tasks.map((x) => x.title)).toEqual(['b'])
+    s = applyLocal(s, planToggleChecklist(s.tasks[0], 0))
+    expect(s.tasks[0].checklist[0].done).toBe(true)
+    s = applyLocal(s, planFinish(s.tasks, cats, t.id, 'completed', env))
+    expect(s.tasks).toEqual([])
+    expect(s.completions).toHaveLength(1)
+    s = applyLocal(s, planRestore(s.tasks, cats, s.completions[0], env))
+    expect(s.tasks).toHaveLength(1)
+    expect(s.completions).toHaveLength(0)
   })
 })
 

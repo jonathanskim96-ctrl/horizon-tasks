@@ -22,8 +22,9 @@ before every push.
   and URLs are never built from user input.
 - **Validation:** validate on write in `src/domain/validate.ts`, mirrored by DB
   constraints (types, integer priority, size limits).
-- **Writes:** only through `guardedWrite(key, …)` → `apply_changes` (atomic). No
-  second guard.
+- **Writes:** only through `guardedWrite(key, …)`: task/history changes via
+  `useStore().commit` → `apply_changes` (atomic); category inserts via
+  `useStore().addCategory`. No second guard.
 - **Errors:** always surfaced in the UI; never swallowed.
 - **Dependencies:** add only well-known packages. Run `npm audit` after adding one.
 - **CI/workflows:** least-privilege `permissions:`; untrusted values go through `env:`,

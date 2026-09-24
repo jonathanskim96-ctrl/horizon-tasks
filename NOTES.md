@@ -76,6 +76,20 @@ data, forms, handlers, render or storage.
    *variables*, not committed files.
 10. Visual theme: the artifact's dark palette (tokens in `src/index.css`).
 
+## UI (session 2)
+
+- `src/screens/Main.tsx` owns tabs, the single open sheet, toasts and action
+  errors. Tabs built so far: Dashboard, Daily, Forever. The overdue pill opens
+  Daily for now; the overdue popup comes next.
+- `src/data/useStore.ts`: loads everything on sign-in, reloads when the app
+  becomes visible (cross-device sync), `commit()` = guarded atomic write + local mirror.
+- Forms validate with `validateTask` and show errors inline per field.
+- **Added rule:** editing a parent to a due date earlier than one of its
+  subtasks is refused with an inline message (mirror of the subtask rule).
+- Browser-tested against a mocked Supabase (Playwright, scratch script):
+  create/validate/subtask date rule/cascade complete/recurrence/delete/custom
+  category/Forever; user text with HTML renders as plain text.
+
 ## Open items
 
 - Supabase project + Google OAuth client (user) — step-by-step in `docs/SETUP.md`.
@@ -89,3 +103,4 @@ data, forms, handlers, render or storage.
 - 2026-09-24 — Assumptions confirmed; real category colors + "Other"; dark theme; `docs/SETUP.md`.
 - 2026-09-24 — GitHub Pages auto-deploy; setup guide rewritten browser-only.
 - 2026-09-24 — Security pass: 0002_hardening, PKCE, size limits, safeColor, CLAUDE.md checklist.
+- 2026-09-24 — Session 2: Dashboard, Daily, Forever, task form, detail, complete/delete flows.

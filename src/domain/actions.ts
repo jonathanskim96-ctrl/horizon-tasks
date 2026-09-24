@@ -2,7 +2,7 @@
 // that the `apply_changes` RPC applies atomically. No I/O here.
 import { addDays, diffDays } from './dates'
 import { descendantsOf } from './placement'
-import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type Completion, type ISODate, type Outcome, type Task, type TaskSnapshot } from './types'
+import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type Completion, type ISODate, type Outcome, type Snapshot, type Task, type TaskSnapshot } from './types'
 
 export interface Env {
   now: () => string // UTC ISO timestamp
@@ -152,4 +152,37 @@ export function subtaskProgress(tasks: Task[], completions: Completion[], taskId
   const open = tasks.filter((t) => t.parentId === taskId).length
   const done = completions.filter((c) => c.parentId === taskId && c.outcome === 'completed').length
   return { done, total: open + done }
+}
+
+/** Create a new task from validated fields. */
+export function planCreate(value: Omit<Task, 'id' | 'createdAt'>, env: Env = defaultEnv): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.inserts.push({ ...value, id: env.newId(), createdAt: env.now() })
+  return cs
+}
+
+/** Replace a task's editable fields with validated ones. */
+export function planUpdate(existing: Task, value: Omit<Task, 'id' | 'createdAt'>): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.updates.push({ ...existing, ...value })
+  return cs
+}
+
+/** Toggle one checklist item. */
+export function planToggleChecklist(existing: Task, index: number): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.updates.push({ ...existing, checklist: existing.checklist.map((c, i) => (i === index ? { ...c, done: !c.done } : c)) })
+  return cs
+}
+
+/** Mirror a successfully applied ChangeSet into local state. */
+export function applyLocal(s: Snapshot, cs: ChangeSet): Snapshot {
+  const gone = new Set(cs.deletes)
+  const updated = new Map(cs.updates.map((t) => [t.id, t]))
+  const historyGone = new Set(cs.historyDeletes)
+  return {
+    ...s,
+    tasks: [...s.tasks.filter((t) => !gone.has(t.id)).map((t) => updated.get(t.id) ?? t), ...cs.inserts],
+    completions: [...cs.completions, ...s.completions].filter((c) => !historyGone.has(c.id)),
+  }
 }

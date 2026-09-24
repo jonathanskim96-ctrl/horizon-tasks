@@ -1,5 +1,5 @@
 // Supabase I/O. Maps between Postgres rows (snake_case) and domain types.
-import type { Category, ChangeSet, Completion, Task } from '../domain/types'
+import type { Category, ChangeSet, Snapshot, Task } from '../domain/types'
 import { STARTER_CATEGORIES } from '../domain/categories'
 import { supabase } from './supabase'
 
@@ -9,10 +9,10 @@ function db() {
 }
 
 /** Throws a readable Error for any Supabase error — never swallow. */
-function check<T>(res: { data: T | null; error: { message: string } | null }, what: string): T {
+function check<T>(res: { data: T | null; error: { message: string } | null }, what: string): NonNullable<T> {
   if (res.error) throw new Error(`${what} failed: ${res.error.message}`)
-  if (res.data === null) throw new Error(`${what} failed: no data returned`)
-  return res.data
+  if (res.data == null) throw new Error(`${what} failed: no data returned`)
+  return res.data as NonNullable<T>
 }
 
 interface TaskRow {
@@ -62,12 +62,6 @@ const taskToRow = (t: Task): TaskRow => ({
   created_at: t.createdAt,
 })
 
-export interface Snapshot {
-  tasks: Task[]
-  categories: Category[]
-  completions: Completion[]
-}
-
 export async function loadAll(): Promise<Snapshot> {
   const [t, c, h] = await Promise.all([
     db().from('tasks').select('*'),
@@ -87,6 +81,13 @@ export async function loadAll(): Promise<Snapshot> {
       snapshot: r.snapshot,
     })),
   }
+}
+
+/** Insert one category (already validated). */
+export async function createCategory(name: string, color: string, sortOrder: number): Promise<Category> {
+  const res = await db().from('categories').insert({ name, color, sort_order: sortOrder }).select().single()
+  const r = check<{ id: string; name: string; color: string; sort_order: number }>(res, 'Adding category')
+  return { id: r.id, name: r.name, color: r.color, sortOrder: r.sort_order }
 }
 
 /** Seeds starter categories the first time only (tracked server-side). */

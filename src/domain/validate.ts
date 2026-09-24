@@ -88,6 +88,13 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
     }
   }
 
+  // Editing a parent: it can't move earlier than any of its subtasks.
+  if (ctx.selfId && dueDate) {
+    const late = ctx.tasks.filter((t) => t.parentId === ctx.selfId && t.dueDate && t.dueDate > dueDate)
+    if (late.length)
+      errors.dueDate ??= `${late.length === 1 ? `Subtask “${late[0].title}” is` : `${late.length} subtasks are`} due after this date — move ${late.length === 1 ? 'it' : 'them'} first.`
+  }
+
   let recurrence: Task['recurrence'] = null
   if (input.recurrence) {
     const n = input.recurrence.everyNDays
@@ -146,4 +153,13 @@ export function validateQuickAdd(rows: QuickAddRow[], ctx: ValidationContext): Q
     else rowErrors[i] = r.errors
   })
   return Object.keys(rowErrors).length ? { ok: false, rowErrors } : { ok: true, values }
+}
+
+/** Validate a new category name. Returns an error message or null. */
+export function validateCategoryName(name: string, existing: Category[]): string | null {
+  const n = name.trim()
+  if (!n) return 'Category name is required.'
+  if (n.length > 60) return 'Category name is too long (max 60 characters).'
+  if (existing.some((c) => c.name.toLowerCase() === n.toLowerCase())) return `“${n}” already exists.`
+  return null
 }
