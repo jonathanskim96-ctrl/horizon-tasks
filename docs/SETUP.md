@@ -1,193 +1,154 @@
 # Setup guide (zero experience assumed)
 
-This is a one-time setup, about 45–60 minutes. You'll create three things, then
-run the app on your own computer:
+A one-time setup, about 30–40 minutes, done entirely in your web browser. You
+don't install anything on your computer. When you're done, the app lives at:
 
-| Piece | What it is | Why you need it |
+**https://jonathanskim96-ctrl.github.io/horizon-tasks/**
+
+It rebuilds and republishes itself automatically every time new code is pushed.
+
+| Piece | What it is | Why |
 |---|---|---|
-| **Supabase project** | An online database with a sign-in system. The free tier is enough. | Stores your tasks and syncs them across devices. |
-| **Google OAuth client** | A "Sign in with Google" registration in Google Cloud. Free. | Lets Supabase confirm that it's really you signing in. |
-| **The app on your computer** | The code from GitHub, running locally. | Lets you test it before it's hosted online. |
+| **Supabase project** | An online database with a sign-in system (free tier). | Stores and syncs your tasks. |
+| **Google OAuth client** | A "Sign in with Google" registration in Google Cloud (free). | Lets Supabase confirm that it's you. |
+| **GitHub Pages** | Free hosting built into GitHub. | Serves the app at the address above. |
 
-> **Keep these private:** database password, Google **Client secret**, Supabase
-> **secret / service_role** key. Never paste them into GitHub or a chat.
-> The Supabase **publishable / anon** key and the **project URL** are designed to be
-> public-ish, but they still go only in `.env.local` (which git ignores).
+> **Keep private:** database password, Google **Client secret**, and any Supabase
+> **secret / service_role** key. The **Project URL** and **publishable key**
+> are meant to be public: they end up inside the web app anyway, and your data
+> is protected by sign-in plus database rules (RLS).
 
-Keep a scratch note open. You'll collect these values as you go:
+In every link below, `<ref>` is your project ref: the part of your Project URL
+before `.supabase.co`.
 
-```
-Project URL:          https://xxxxxxxx.supabase.co
-Project ref:          xxxxxxxx              (the part before .supabase.co)
-Publishable/anon key: sb_publishable_...   (or a long eyJ... string)
-Google Client ID:     ....apps.googleusercontent.com
-Google Client secret: GOCSPX-...           (private!)
-```
-
-Website menus get renamed often. If a label below doesn't match exactly, look
-for the closest match. The structure stays the same.
+Menus get renamed often. If a label doesn't match exactly, look for the closest one.
 
 ---
 
-## Part 1 — Create the Supabase project (≈10 min)
+## Part 1 — Create the Supabase project
 
-1. Go to **https://supabase.com** → **Sign in** (or **Start your project**). The
-   easiest way is **Continue with GitHub** using your GitHub account.
-2. If asked to create an **organization**, name it anything (e.g. your name),
-   type **Personal**, plan **Free**.
-3. Click **New project**:
-   - **Name:** `horizon-tasks`
-   - **Database password:** click **Generate a password**, then save it in your
-     password manager. The app doesn't use it, but you may need it someday.
-   - **Region:** a West US region (closest to Los Angeles).
-   - Click **Create new project**. Setup takes 1–2 minutes.
-4. **Copy your project URL and key:**
-   - Click **Connect** at the top of the project page, or go to **Project Settings**
-     (gear icon, bottom-left) → **Data API** / **API Keys**.
-   - Copy the **Project URL** (`https://xxxxxxxx.supabase.co`). The `xxxxxxxx` part
-     is your **project ref**.
-   - Copy the **Publishable key** (starts `sb_publishable_`). If you only see
-     "legacy" keys, copy the **anon public** one. **Don't** copy the
-     *secret* / *service_role* key.
+1. Go to **https://supabase.com** → **Sign in** → **Continue with GitHub**.
+2. **New project** → name `horizon-tasks`; **Generate a password** and save it in
+   your password manager; choose a West US region → **Create new project**.
+3. Note the **Project URL** and **Publishable key** (under **Connect** or
+   **Project Settings → API Keys**).
 
-## Part 2 — Create the database tables (≈5 min)
+## Part 2 — Create the database tables
 
-1. Open the migration file on GitHub:
-   `https://github.com/jonathanskim96-ctrl/horizon-tasks/blob/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0001_init.sql`
-   (after this is merged to `main`, use `main` in place of the branch name).
-2. Click the **Copy raw file** button (two overlapping squares, top-right of the file).
-3. In Supabase, left sidebar → **SQL Editor** → **New query** (or the **+** button).
-4. Paste everything and click **Run** (or Ctrl/Cmd + Enter).
-5. You should see **"Success. No rows returned."** If Supabase warns that the query
-   is "destructive" or asks for confirmation, confirm.
-6. Check: left sidebar → **Table Editor**. You should see `categories`,
-   `completions`, `profiles` and `tasks`, all empty. Each one should have RLS
-   ("Row Level Security") shown as enabled.
+This step pastes one file of database instructions (SQL) into Supabase and runs it.
+It creates the four tables the app uses and the security rules that keep them private to you.
 
-Run each migration file only once. Later changes will come as new files
-(`0002_...sql`), and you'll run those the same way.
+1. **Open the SQL file as plain text.** In a new browser tab, open:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0001_init.sql`
+   (after this code is merged to `main`, replace the branch name with `main`).
+   You'll see a page of plain text starting with `-- Horizon Tasks schema v1.`
+2. **Copy all of it.** Click anywhere in the text, press **Ctrl + A** (Mac: **Cmd + A**)
+   to select everything, then **Ctrl + C** (Mac: **Cmd + C**) to copy.
+3. **Open Supabase's SQL editor.** Go to `https://supabase.com/dashboard/project/<ref>/sql/new`.
+   Or, in your project, click the **SQL Editor** icon in the left sidebar (it looks like
+   `>_`) and then **+ → New query**. You'll see a big empty text box.
+4. **Paste.** Click inside the empty box, press **Ctrl + A** to clear any sample text, then
+   **Ctrl + V** (Mac: **Cmd + V**). The box now holds about 200 lines.
+5. **Run it.** Click the green **Run** button (bottom-right of the box), or press
+   **Ctrl + Enter** (Mac: **Cmd + Enter**).
+   - If a pop-up asks you to confirm running the query, click **Run this query**.
+6. **Check the result.** The panel under the box should say
+   **"Success. No rows returned."** That's the correct result: the file creates
+   things but doesn't return any data.
+   - If you see a red error mentioning `already exists`, the file has already been
+     run once, which is fine. Don't run it again.
+   - For any other red error, copy the message and send it to Claude.
+7. **Confirm the tables exist.** Open **Table Editor** (`https://supabase.com/dashboard/project/<ref>/editor`).
+   Under the `public` schema you should see four tables: **categories**, **completions**,
+   **profiles** and **tasks**, all empty. Categories get created on your first sign-in.
 
-## Part 3 — Create the Google sign-in client (≈15 min)
+Each migration file runs **once**. Future changes will arrive as new files
+(`0002_…`, `0003_…`), and you'll run them the same way.
 
-1. Go to **https://console.cloud.google.com** and sign in with the Google account
-   you'll use for the app. Accept the terms if asked.
-2. **Create a project:** click the project picker at the top-left (next to
-   "Google Cloud") → **New project** → name `Horizon Tasks` → **Create**. Wait for
-   it, then make sure it's selected in the picker.
-3. **Set up the consent screen:** search bar → type **"Google Auth Platform"**
-   (older name: "OAuth consent screen") → open it → **Get started**:
-   - **App name:** `Horizon Tasks`; **User support email:** your Gmail.
-   - **Audience:** **External**.
-   - **Contact email:** your Gmail → agree to the policy → **Create**.
-4. **Add yourself as a test user:** in Google Auth Platform → **Audience** →
-   **Test users** → **Add users** → your Gmail → **Save**.
-   The app stays in "Testing" mode, so *only* the emails listed here can ever sign in.
-   For a single-user app that's a useful extra lock, and you don't need
-   to publish or verify the app.
-5. **Create the client:** Google Auth Platform → **Clients** → **Create client**:
-   - **Application type:** **Web application**
-   - **Name:** `Horizon Tasks web`
-   - **Authorized JavaScript origins:** you can leave this empty.
-   - **Authorized redirect URIs** → **Add URI** →
-     `https://<project-ref>.supabase.co/auth/v1/callback`
-     (use your real project ref, e.g. `https://abcdwxyz.supabase.co/auth/v1/callback`).
-   - Click **Create**.
-6. A box shows the **Client ID** and **Client secret**. Copy both into your scratch
-   note now, or click **Download JSON**. Google may not show the secret again.
+> **Shortcut for the future:** connect the **Supabase connector** at
+> https://claude.ai/customize/connectors and start a new Claude session. Claude
+> can then run migrations and check your tables for you, so you won't need to copy and paste.
 
-## Part 4 — Connect Google to Supabase (≈5 min)
+## Part 3 — Create Google sign-in
 
-1. Supabase → left sidebar → **Authentication** → **Sign In / Providers** (older
-   name: "Providers") → **Google**.
-2. Turn **Enable Sign in with Google** on.
-3. Paste the **Client ID** (the field may be called "Client IDs") and the **Client
-   secret**. Leave other options at their defaults → **Save**.
-4. That panel also shows a **Callback URL**. Check that it's exactly the one you put
-   in Google (Part 3, step 5). If it differs, fix it in Google.
-5. Supabase → **Authentication** → **URL Configuration**:
-   - **Site URL:** `http://localhost:5173`
-   - **Redirect URLs** → **Add URL** → `http://localhost:5173/**` → **Save**.
-   (When the app is deployed online later, you'll add its web address here too.)
+1. Go to **https://console.cloud.google.com** and sign in with the Gmail you'll use for the app.
+2. Project picker (top-left) → **New project** → `Horizon Tasks` → **Create** → select it.
+3. Search bar → **Google Auth Platform** → **Get started**: app name `Horizon Tasks`,
+   support email = your Gmail, Audience **External**, contact email = your Gmail →
+   agree → **Create**.
+4. **Audience → Test users → Add users** → your Gmail → **Save**. Only emails on this
+   list can ever sign in.
+5. **Clients → Create client** → type **Web application**, name `Horizon Tasks web`.
+   Under **Authorized redirect URIs** → **Add URI** →
+   `https://<ref>.supabase.co/auth/v1/callback` → **Create**.
+6. Copy the **Client ID** and **Client secret** now. Google may not show the secret again.
 
-## Part 5 — Install tools on your computer (≈10 min, once)
+## Part 4 — Connect Google to Supabase
 
-You need **Node.js**, which runs the app's build tools, and **Git**, which downloads the code.
+1. Open `https://supabase.com/dashboard/project/<ref>/auth/providers` → **Google** →
+   turn it on → paste the Client ID and Client secret → **Save**.
+   Check that the **Callback URL** shown there matches the one you gave Google.
+2. Open `https://supabase.com/dashboard/project/<ref>/auth/url-configuration`:
+   - **Site URL:** `https://jonathanskim96-ctrl.github.io/horizon-tasks/`
+   - **Redirect URLs → Add URL:** `https://jonathanskim96-ctrl.github.io/horizon-tasks/**`
+     (optionally also `http://localhost:5173/**` for running it on your own computer)
+   - Click **Save**.
 
-- **Node.js:** https://nodejs.org → download the **LTS** installer → run it with
-  default options.
-- **Git:**
-  - Mac: open **Terminal** (Cmd + Space, type "Terminal") and type `git --version`.
-    If it asks to install developer tools, click **Install**.
-  - Windows: https://git-scm.com/download/win → run the installer with default options.
+## Part 5 — Turn on automatic publishing (GitHub Pages)
 
-Check that both installed. Open a terminal (Mac: **Terminal**; Windows: **Git Bash**,
-which Git installed) and run:
+1. **Enable Pages:** open https://github.com/jonathanskim96-ctrl/horizon-tasks/settings/pages →
+   under **Build and deployment → Source**, choose **GitHub Actions**. There's no save
+   button; the change applies immediately.
+2. **Give the build your two public values:** open
+   https://github.com/jonathanskim96-ctrl/horizon-tasks/settings/variables/actions →
+   make sure the **Variables** tab is selected (not Secrets) → **New repository variable**:
+   - Name `VITE_SUPABASE_URL`, value = your Project URL → **Add variable**
+   - Name `VITE_SUPABASE_ANON_KEY`, value = your publishable key → **Add variable**
+3. **Publish it for the first time:** open https://github.com/jonathanskim96-ctrl/horizon-tasks/actions →
+   click **Deploy to GitHub Pages** in the left list → **Run workflow** (right side) →
+   **Run workflow**. Wait about 1–2 minutes for a green check mark.
+   From now on, every new push publishes automatically.
+
+## Part 6 — First sign-in
+
+1. Open **https://jonathanskim96-ctrl.github.io/horizon-tasks/** → **Sign in with Google**.
+   If Google says "Google hasn't verified this app", that's expected for your own
+   app: click **Continue**.
+2. You should see **6 categories · 0 history**. In Supabase's Table Editor,
+   `categories` now has MPH, Core Lab, KFAM, Admin, Financial and Other.
+3. **On your phone:** open the same address. On iPhone, tap Safari's **Share** →
+   **Add to Home Screen**. On Android, open Chrome's **⋮** menu → **Install app**.
+
+## Part 7 — Lock the door
+
+Open `https://supabase.com/dashboard/project/<ref>/auth/providers` (or
+**Authentication → Sign In / Providers**) → turn **off "Allow new users to sign up"**
+→ **Save**. Do this *after* your first sign-in.
+
+---
+
+## Optional — run it on your own computer
+
+You only need this if you want to try changes before they're published.
+Install **Node.js LTS** (nodejs.org) and **Git** (git-scm.com; on Mac, run
+`git --version` in Terminal and accept the install). Then, in a terminal:
 
 ```sh
-node --version    # should print v20 or higher
-git --version
-```
-
-## Part 6 — Run the app (≈10 min)
-
-In the terminal, run these one at a time:
-
-```sh
-cd ~                        # go to your home folder (or wherever you keep projects)
 git clone https://github.com/jonathanskim96-ctrl/horizon-tasks.git
 cd horizon-tasks
-git checkout claude/horizon-tasks-pwa-rebuild-3bnzjv   # skip once merged to main
-npm install                 # downloads libraries; takes a minute
-cp .env.example .env.local  # makes your private settings file
+npm install
+cp .env.example .env.local   # then put your two values in .env.local
+npm run dev                  # open http://localhost:5173
 ```
-
-Now open `.env.local` in a text editor. On Mac, `open -e .env.local` opens it in
-TextEdit. On Windows, `notepad .env.local`. Replace the two placeholder lines
-with your values. No quotes, no spaces around `=`:
-
-```
-VITE_SUPABASE_URL=https://abcdwxyz.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxxxxxxx
-```
-
-Save and close it. Then:
-
-```sh
-npm run dev
-```
-
-The terminal prints `Local: http://localhost:5173/`. Open that address in your
-browser. Leave the terminal running; press Ctrl + C to stop the app when you're done.
-
-## Part 7 — First sign-in (≈2 min)
-
-1. Click **Sign in with Google** → pick your account. Google may warn that
-   "Google hasn't verified this app". That's expected for your own Testing-mode app:
-   click **Continue**.
-2. You land back on the app, signed in. It should show **6 categories · 0 history**
-   and zeros for the task counts.
-3. Check in Supabase → **Table Editor** → `categories`: the six rows (MPH, Core Lab,
-   KFAM, Admin, Financial, Other) are there.
-
-## Part 8 — Lock the door (1 min)
-
-Supabase → **Authentication** → **Sign In / Providers** (or **Settings**) → turn
-**off "Allow new users to sign up"** → **Save**. You can still sign in because
-your account already exists, but nobody else can create one. (Google's test-user
-list from Part 3 is a second lock.)
-
----
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| App says "Supabase is not configured" | `.env.local` is missing, misnamed, or has typos. Fix it, then stop (Ctrl + C) and rerun `npm run dev`. |
-| Google says **redirect_uri_mismatch** | The redirect URI in Google (Part 3.5) must match Supabase's Callback URL exactly: `https`, no trailing slash. |
+| Deploy run fails at "Check config" | The two repository **variables** are missing or misnamed. Add them under the Variables tab (Part 5.2), not Secrets. |
+| Deploy fails with "Pages not enabled" / 404 | Part 5.1: set Source to **GitHub Actions**, then rerun the workflow. |
+| Google says **redirect_uri_mismatch** | The Google redirect URI must exactly equal Supabase's Callback URL. |
 | Google says **access blocked / not a test user** | Add your Gmail under Google Auth Platform → Audience → Test users. |
-| After Google sign-in you land on a Supabase error page or the wrong address | Check Site URL / Redirect URLs in Part 4.5. |
-| Red banner: "… failed: relation … does not exist" | The migration didn't run. Redo Part 2. |
-| Red banner: "Signups not allowed" on first sign-in | You did Part 8 too early. Turn sign-ups back on, sign in once, then turn them off. |
-| `npm: command not found` | Node.js isn't installed, or the terminal was opened before installing. Close the terminal, reopen it and try again. |
-
-When everything works, tell Claude "setup done" and the screens come next.
+| After sign-in you land on the wrong page, or a Supabase error | Recheck the Site URL and Redirect URLs (Part 4.2), including the `/horizon-tasks/` part. |
+| Red banner "… relation … does not exist" | Part 2 didn't run successfully. Redo it. |
+| Red banner "Signups not allowed" | You did Part 7 before signing in. Turn sign-ups on, sign in once, then turn them off. |

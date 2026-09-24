@@ -60,12 +60,15 @@ data, forms, handlers, render or storage.
    palette is the artifact's 10 colors.
 8. **Build order**: Dashboard + Daily with full task form and Complete → overdue
    popup + History → Weekly/Monthly/Forever/Later → Quick Add → export → import.
-9. Visual theme: the artifact's dark palette (tokens in `src/index.css`).
+9. **Hosting**: GitHub Pages via `.github/workflows/deploy.yml`, auto-deploy on
+   push to the default branch, at https://jonathanskim96-ctrl.github.io/horizon-tasks/
+   (Vite `base` from `BASE_PATH`). Supabase URL + publishable key come from repo
+   *variables*, not committed files.
+10. Visual theme: the artifact's dark palette (tokens in `src/index.css`).
 
 ## Open items
 
 - Supabase project + Google OAuth client (user) — step-by-step in `docs/SETUP.md`.
-- Hosting (Vercel/Netlify) — decide at deploy time.
 - Import from the v4 artifact — once schema is live, via backend, never via repo.
 - PWA icons: currently only the SVG favicon; add 192/512 PNGs + maskable before install testing.
 
@@ -74,3 +77,4 @@ data, forms, handlers, render or storage.
 - 2026-09-24 — Session 1: scaffold, schema v1 + SQL tests, domain logic + 24
   unit tests, Google sign-in wiring, minimal signed-in shell.
 - 2026-09-24 — Assumptions confirmed; real category colors + "Other"; dark theme; `docs/SETUP.md`.
+- 2026-09-24 — GitHub Pages auto-deploy; setup guide rewritten browser-only.

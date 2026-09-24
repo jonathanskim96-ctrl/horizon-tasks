@@ -21,16 +21,8 @@ npm run typecheck && npm run lint && npm test
 
 ## One-time backend setup
 
-Full step-by-step walkthrough: [`docs/SETUP.md`](docs/SETUP.md). Summary:
-
-1. **Supabase project** → SQL Editor → run each file in `supabase/migrations/` in order.
-2. **Google OAuth client** (Google Cloud Console → APIs & Services → Credentials):
-   type *Web application*; authorized redirect URI
-   `https://<project-ref>.supabase.co/auth/v1/callback`.
-3. Supabase → Authentication → Providers → **Google**: enable, paste Client ID/Secret.
-4. Supabase → Authentication → URL Configuration: Site URL `http://localhost:5173`
-   (add the deployed URL later) and the same in the redirect allow-list.
-5. Sign in once, then Supabase → Authentication → Sign In / Providers →
-   turn **off "Allow new users to sign up"** so nobody else can create an account.
+Full step-by-step walkthrough (browser only, no installs): [`docs/SETUP.md`](docs/SETUP.md).
+The app auto-deploys to GitHub Pages on every push to the default branch:
+https://jonathanskim96-ctrl.github.io/horizon-tasks/
 
 See `NOTES.md` for design decisions and the working process.
