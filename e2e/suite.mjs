@@ -29,9 +29,13 @@ async function scenario(name, fn, { signedOut = false } = {}) {
 }
 
 const dlg = (page) => page.getByRole('dialog')
+async function openForm(page) {
+  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Add task' }).click()
+}
 async function boot(page) { await page.goto(BASE); await page.getByText('Due today', { exact: true }).waitFor() }
 async function newTask(page, { title, p = 'P3', cat = 'Admin', due = iso(), forever = false, repeat, end, check, notes }) {
-  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill(title)
   await page.getByRole('button', { name: p, exact: true }).click()
   await dlg(page).getByRole('button', { name: cat, exact: true }).click()
@@ -50,7 +54,7 @@ const row = (page, text) => page.locator('.task-row', { hasText: text }).first()
 
 await scenario('XSS payloads render as inert text everywhere', async ({ page }) => {
   await boot(page)
-  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await openForm(page)
   await page.getByRole('button', { name: '+ New' }).click()
   await page.getByPlaceholder('Category name').fill('<img src=x onerror="window.__xss=4">')
   await page.getByRole('button', { name: 'Add', exact: true }).click()
@@ -87,7 +91,7 @@ await scenario('Refuses to run inside a frame (clickjacking)', async ({ page }) 
 
 await scenario('Double-tap Save creates exactly one task', async ({ page, mock }) => {
   await boot(page)
-  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill('Only once')
   await page.getByRole('button', { name: 'P2', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
@@ -217,7 +221,7 @@ await scenario('Forever task with a due date shows in Daily and Forever', async 
 
 await scenario('Escape closes sheets; invalid recurrence rejected', async ({ page }) => {
   await boot(page)
-  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill('R')
   await page.getByRole('button', { name: 'P1', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
@@ -297,6 +301,191 @@ await scenario('Unexpected errors are shown, not swallowed', async ({ page }) =>
   await boot(page)
   await page.evaluate(() => { setTimeout(() => Promise.reject(new Error('surprise failure')), 0) })
   await page.getByText('Something went wrong: surprise failure').waitFor()
+})
+
+const U = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+
+await scenario('Overdue popup: opens once per app open; Dismiss / Not needed / Complete', async ({ page, mock }) => {
+  mock.seed([
+    { id: U(1), title: 'Old report', due_date: iso(-10), priority: 5 },
+    { id: U(2), title: 'Water plants', due_date: iso(-3), recurrence_every_n_days: 7 },
+    { id: U(3), title: 'Big project', due_date: iso(-1) },
+    { id: U(4), title: 'Sub step', due_date: iso(-2), parent_id: U(3), depth: 1 },
+    { id: U(5), title: 'Future thing', due_date: iso(5) },
+  ])
+  await page.goto(BASE)
+  await page.getByRole('dialog', { name: '4 overdue' }).waitFor()
+  const item = (t) => dlg(page).locator('.popup-item', { has: page.locator('.task-title', { hasText: new RegExp(`^${t}$`) }) })
+  await item('Old report').getByRole('button', { name: 'Dismiss' }).click()
+  await page.getByRole('dialog', { name: '3 overdue' }).waitFor()
+  if (mock.calls.apply !== 0) throw new Error('Dismiss wrote data')
+  await item('Water plants').getByRole('button', { name: 'Not needed' }).click()
+  await page.getByText(`Marked not needed — next due ${iso(4)}.`).waitFor()
+  await item('Big project').getByRole('button', { name: 'Complete' }).click()
+  await item('Big project').getByText('Also completes its 1 open subtask(s)').waitFor()
+  if (mock.calls.apply !== 1) throw new Error('completed without confirming')
+  await item('Big project').getByRole('button', { name: 'Confirm complete' }).click()
+  await page.getByRole('dialog', { name: 'All caught up' }).waitFor()
+  const hist = mock.db.completions.map((c) => [c.snapshot.title, c.outcome]).sort()
+  if (JSON.stringify(hist) !== JSON.stringify([['Big project', 'completed'], ['Sub step', 'completed'], ['Water plants', 'skipped']])) throw new Error(JSON.stringify(hist))
+  await dlg(page).getByRole('button', { name: 'Close' }).last().click()
+  // Old report is still overdue; the popup doesn't reopen on its own during this app open…
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await page.waitForTimeout(500)
+  if (await dlg(page).count()) throw new Error('popup reopened by itself')
+  // …but the header pill opens it on demand.
+  await page.getByRole('button', { name: '1 overdue' }).click()
+  await dlg(page).locator('.popup-item', { hasText: 'Old report' }).waitFor()
+})
+
+await scenario('Weekly / Monthly / Later tabs place tasks correctly', async ({ page, mock }) => {
+  const nextMonth = (() => { const d = new Date(); return `${d.getFullYear() + (d.getMonth() === 11 ? 1 : 0)}-${String(((d.getMonth() + 1) % 12) + 1).padStart(2, '0')}-15` })()
+  mock.seed([
+    { id: U(1), title: 'Today task', due_date: iso(0) },
+    { id: U(2), title: 'In 20 days', due_date: iso(20) },
+    { id: U(3), title: 'Far future', due_date: '2099-01-01' },
+    { id: U(4), title: 'Next month', due_date: nextMonth },
+  ])
+  await boot(page)
+  await page.getByRole('button', { name: 'Weekly' }).click()
+  await row(page, 'Today task').waitFor()
+  if (await row(page, 'In 20 days').count()) throw new Error('20 days in weekly')
+  await page.getByRole('button', { name: 'Calendar' }).click()
+  await page.locator('.cal-cell.today').click()
+  await dlg(page).count() // no dialog expected
+  await page.locator('.cal-day-list .task-row', { hasText: 'Today task' }).waitFor()
+  await page.getByRole('button', { name: 'Monthly' }).click()
+  await row(page, 'In 20 days').waitFor()
+  if (await row(page, 'Far future').count()) throw new Error('far future in monthly list')
+  await page.getByRole('button', { name: 'Calendar' }).click()
+  await page.getByRole('button', { name: 'Next month' }).click()
+  await page.locator(`.cal-cell[aria-label^="${nextMonth}"]`).click()
+  await page.locator('.cal-day-list .task-row', { hasText: 'Next month' }).waitFor()
+  await page.getByRole('button', { name: 'Later' }).click()
+  await row(page, 'Far future').waitFor()
+  await row(page, 'Next month').waitFor()
+  if (await row(page, 'Today task').count()) throw new Error('today in later')
+})
+
+await scenario('Quick add: blank rows ignored, all-or-nothing, one atomic write, resets', async ({ page, mock }) => {
+  await boot(page)
+  await page.getByRole('button', { name: 'Add task', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Quick add' }).click()
+  const fill = async (i, title, due, p, cat) => {
+    await page.getByLabel(`Row ${i} title`).fill(title)
+    if (due) await page.getByLabel(`Row ${i} due date`).fill(due)
+    if (p) await page.getByLabel(`Row ${i} priority`).selectOption(String(p))
+    if (cat) await page.getByLabel(`Row ${i} category`).selectOption({ label: cat })
+  }
+  await fill(1, 'QA one', iso(1), 2, 'MPH')
+  await fill(3, 'QA three <b>x</b>', iso(2), 4, 'Admin')
+  await fill(5, 'QA five', iso(3), null, 'KFAM') // missing priority
+  await page.getByRole('button', { name: 'Save all' }).click()
+  await page.getByText('Nothing was saved').waitFor()
+  await page.locator('.qa-row.has-error').getByText('Priority must be a whole number').waitFor()
+  if (mock.calls.apply !== 0 || mock.db.tasks.length) throw new Error('partial save')
+  await page.getByLabel('Row 5 priority').selectOption('1')
+  await page.getByRole('button', { name: 'Save all' }).click()
+  await page.getByText('Added 3 tasks.').waitFor()
+  if (mock.calls.apply !== 1 || mock.db.tasks.length !== 3) throw new Error(`calls ${mock.calls.apply}, tasks ${mock.db.tasks.length}`)
+  if (await page.getByLabel('Row 1 title').inputValue()) throw new Error('form not reset')
+  await dlg(page).waitFor() // stays open for another burst
+  await page.getByRole('button', { name: 'Save all' }).click()
+  await page.getByText('Type a title in at least one row.').waitFor()
+})
+
+await scenario('History: restore reattaches, permanent delete asks first', async ({ page, mock }) => {
+  mock.seed([
+    { id: U(1), title: 'Parent P', due_date: iso(3) },
+    { id: U(2), title: 'Child C', due_date: iso(2), parent_id: U(1), depth: 1 },
+    { id: U(3), title: 'Solo', due_date: iso(1) },
+  ])
+  await boot(page)
+  await page.getByRole('button', { name: 'Complete “Child C”' }).first().click()
+  await page.getByText('Completed.', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Complete “Solo”' }).first().click()
+  await page.getByText('Completed.', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.getByText('History · 2').waitFor()
+  await page.getByRole('button', { name: 'Restore “Child C”' }).click()
+  await page.getByText('Restored under “Parent P”.').waitFor()
+  const c = mock.db.tasks.find((t) => t.title === 'Child C')
+  if (!c || c.parent_id !== U(1) || c.depth !== 1) throw new Error('not reattached ' + JSON.stringify(c))
+  await page.getByRole('button', { name: 'Delete “Solo” permanently' }).click()
+  await page.getByText("can't be undone").waitFor()
+  if (mock.db.completions.length !== 1) throw new Error('deleted before confirm')
+  await page.getByRole('button', { name: 'Delete forever' }).click()
+  await page.getByText('Deleted from history.').waitFor()
+  if (mock.db.completions.length !== 0) throw new Error('not deleted')
+  await page.getByText('Nothing completed yet.').waitFor()
+})
+
+await scenario('Export CSV is formula-safe; JSON re-import is idempotent', async ({ page, mock }) => {
+  mock.seed([{ id: U(1), title: '=HYPERLINK("http://evil.example","click")', due_date: iso(1) }, { id: U(2), title: 'Plain', due_date: iso(1) }])
+  await boot(page)
+  await page.getByRole('button', { name: 'History' }).click()
+  const [csv] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'CSV' }).click()])
+  const csvText = await (await import('node:fs/promises')).readFile(await csv.path(), 'utf8')
+  if (!csvText.includes(`"'=HYPERLINK(`)) throw new Error('formula not neutralized: ' + csvText.split('\n')[1])
+  const [json] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export JSON' }).click()])
+  const jsonPath = await json.path()
+  if (!/horizon-tasks-\d{4}-\d{2}-\d{2}\.json/.test(json.suggestedFilename())) throw new Error(json.suggestedFilename())
+  await page.getByRole('button', { name: 'Import' }).click()
+  await page.getByLabel('Export file').setInputFiles(jsonPath)
+  await page.getByText('2 already here — skipped').waitFor()
+  if (!(await page.getByRole('button', { name: 'Import', exact: true }).last().isDisabled())) throw new Error('import enabled with nothing to add')
+})
+
+await scenario('Import from the v4 artifact: preview, adjustments, atomic write', async ({ page, mock }) => {
+  const file = {
+    schemaVersion: 1,
+    categories: [{ id: 'a1', name: 'MPH', color: '#5b8cff' }, { id: 'a2', name: 'Gym <img src=x onerror=window.__xss=9>', color: '#f2789a' }],
+    tasks: [
+      { id: 't1', title: 'Thesis', priority: 5, categoryId: 'a1', dueDate: iso(10), checklist: [{ text: 'outline', done: true }] },
+      { id: 't2', title: 'Chapter 1', priority: 4, categoryId: 'a1', dueDate: iso(5), parentId: 't1', depth: 1 },
+      { id: 't3', title: 'Late child', priority: 4, categoryId: 'a1', dueDate: iso(30), parentId: 't1', depth: 1 },
+      { id: 't4', title: 'Lift <script>window.__xss=8</script>', priority: 2, categoryId: 'a2', dueDate: iso(1), recurrence: { everyNDays: 2, endDate: null } },
+      { id: 't5', title: 'Bad', priority: 3.7, categoryId: 'a1', dueDate: iso(1) },
+    ],
+    completions: [{ id: 'h1', title: 'Done before', categoryId: 'a2', priority: 2, parentId: null, parentTitle: null, dueDate: iso(-5), completedAt: iso(-4), outcome: 'completed' }],
+  }
+  mock.seed([])
+  await boot(page)
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.getByRole('button', { name: 'Import' }).click()
+  await page.getByLabel('Export file').setInputFiles({ name: 'export.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) })
+  await dlg(page).getByText('4', { exact: true }).first().waitFor()
+  await dlg(page).getByText(/Late child.*due after its parent/).waitFor()
+  await dlg(page).getByText(/Skipped “Bad”/).waitFor()
+  if (mock.calls.apply !== 0 || mock.db.tasks.length) throw new Error('wrote during preview')
+  await page.getByRole('button', { name: 'Import', exact: true }).last().click()
+  await page.getByText('Imported 4 task(s) and 1 history entry.').waitFor()
+  if (mock.calls.apply !== 1) throw new Error('not one atomic write: ' + mock.calls.apply)
+  const thesis = mock.db.tasks.find((t) => t.title === 'Thesis')
+  if (mock.db.tasks.find((t) => t.title === 'Chapter 1').parent_id !== thesis.id) throw new Error('structure lost')
+  if (!mock.db.categories.some((c) => c.name.startsWith('Gym'))) throw new Error('category not created')
+  await page.getByRole('button', { name: 'Daily' }).click()
+  await page.getByRole('button', { name: 'Weekly' }).click()
+  await row(page, 'Lift <script>').waitFor()
+  if (await page.evaluate(() => window.__xss)) throw new Error('XSS from import')
+})
+
+await scenario('Rejects a non-export file with a clear message', async ({ page }) => {
+  await boot(page)
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.getByRole('button', { name: 'Import' }).click()
+  await page.getByLabel('Export file').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"hello": "world"}') })
+  await page.getByText("doesn't look like a Horizon Tasks export").waitFor()
+  await page.getByLabel('Export file').setInputFiles({ name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('<html>') })
+  await page.getByText("isn't valid JSON").waitFor()
+})
+
+await scenario('App icons and manifest are served', async ({ page }) => {
+  await page.goto(BASE)
+  for (const f of ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'privacy.html']) {
+    const r = await page.request.get(BASE + f)
+    if (!r.ok()) throw new Error(`${f}: ${r.status()}`)
+  }
 })
 
 await browser.close()

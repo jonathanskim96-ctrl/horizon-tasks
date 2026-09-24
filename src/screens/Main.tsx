@@ -2,22 +2,33 @@ import { useCallback, useEffect, useState } from 'react'
 import { signOut } from '../auth/useSession'
 import { useStore } from '../data/useStore'
 import { BusyError } from '../data/writeGuard'
-import { nextOccurrenceDate, planDelete, planFinish, planToggleChecklist } from '../domain/actions'
+import { nextOccurrenceDate, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist } from '../domain/actions'
 import { todayISO } from '../domain/dates'
+import { toCSV, toExportJSON } from '../domain/exporting'
 import { descendantsOf, isOverdue } from '../domain/placement'
-import type { ISODate, Task } from '../domain/types'
+import type { Completion, ISODate, Outcome, Task } from '../domain/types'
+import { downloadText } from '../ui/download'
+import { ImportSheet } from '../ui/ImportSheet'
+import { OverduePopup } from '../ui/OverduePopup'
+import { QuickAdd } from '../ui/QuickAdd'
 import { ErrorBanner } from '../ui/Sheet'
 import { Confirm, TaskDetail } from '../ui/TaskDetail'
 import { TaskForm } from '../ui/TaskForm'
 import { Daily } from './Daily'
 import { Dashboard } from './Dashboard'
 import { Forever } from './Forever'
+import { History } from './History'
+import { Later, Monthly, Weekly } from './Lists'
 
-type Tab = 'dashboard' | 'daily' | 'forever'
+type Tab = 'dashboard' | 'daily' | 'weekly' | 'monthly' | 'forever' | 'later' | 'history'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
   { id: 'forever', label: 'Forever' },
+  { id: 'later', label: 'Later' },
+  { id: 'history', label: 'History' },
 ]
 
 type SheetState =
@@ -25,7 +36,26 @@ type SheetState =
   | { kind: 'form'; editingId?: string; parentId?: string; presetDue?: ISODate; back?: string }
   | { kind: 'confirmComplete'; id: string }
   | { kind: 'confirmDelete'; id: string }
+  | { kind: 'confirmHistoryDelete'; completionId: string }
+  | { kind: 'overdue' }
+  | { kind: 'quickAdd' }
+  | { kind: 'import' }
   | null
+
+/** The active task a sheet is about, if any (History/overdue/quick-add sheets have none). */
+function sheetTask(sheet: SheetState): string | undefined {
+  if (!sheet) return undefined
+  switch (sheet.kind) {
+    case 'detail':
+    case 'confirmComplete':
+    case 'confirmDelete':
+      return sheet.id
+    case 'form':
+      return sheet.editingId ?? sheet.parentId
+    default:
+      return undefined
+  }
+}
 
 /** Keeps "today" correct across midnight and when the app is reopened. */
 function useToday() {
@@ -54,6 +84,13 @@ export function Main({ email }: { email: string }) {
   // Checklist items with a save in flight are disabled, so a quick second tap
   // can't be silently swallowed by the write guard.
   const [pendingChecks, setPendingChecks] = useState<ReadonlySet<string>>(new Set())
+  const [fabMenu, setFabMenu] = useState(false)
+  // The overdue popup opens once per app open, after the first load.
+  const [popupChecked, setPopupChecked] = useState(false)
+  if (data && !popupChecked) {
+    setPopupChecked(true)
+    if (data.tasks.some((t) => isOverdue(t, today))) setSheet((s) => s ?? { kind: 'overdue' })
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -65,7 +102,7 @@ export function Main({ email }: { email: string }) {
 
   // The open sheet's task can vanish (completed/deleted on another device):
   // close the sheet and say so, instead of leaving an invisible open state.
-  const sheetTaskId = sheet && (sheet.kind === 'form' ? (sheet.editingId ?? sheet.parentId) : sheet.id)
+  const sheetTaskId = sheetTask(sheet)
   // Tasks this device removed itself (complete/delete) are excluded.
   const [ownRemovals, setOwnRemovals] = useState<ReadonlySet<string>>(new Set())
   const markOwnRemovals = (ids: string[]) => setOwnRemovals((s) => new Set([...s, ...ids]))
@@ -80,28 +117,75 @@ export function Main({ email }: { email: string }) {
   const close = useCallback(() => setSheet(null), [])
   const report = (e: unknown) => setActionError(e instanceof BusyError ? e.message : `Couldn't save: ${(e as Error).message}`)
 
+  /** Complete or skip (cascading); resolves true on success. Errors are reported. */
+  const finishNow = async (t: Task, outcome: Outcome): Promise<boolean> => {
+    if (!data) return false
+    setBusy(true)
+    let removed: string[] = []
+    try {
+      const cs = planFinish(data.tasks, data.categories, t.id, outcome)
+      removed = cs.deletes
+      markOwnRemovals(removed)
+      await store.commit(`${outcome}:${t.id}`, cs)
+      const next = nextOccurrenceDate(t)
+      const verb = outcome === 'completed' ? 'Completed' : 'Marked not needed'
+      setToast(next ? `${verb} — next due ${next}.` : `${verb}.`)
+      setActionError(null)
+      return true
+    } catch (e) {
+      unmarkOwnRemovals(removed)
+      report(e)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const finish = async (t: Task, confirmed: boolean) => {
     if (!data) return
     if (!confirmed && descendantsOf(data.tasks, t.id).length > 0) {
       setSheet({ kind: 'confirmComplete', id: t.id })
       return
     }
-    setBusy(true)
-    let removed: string[] = []
+    if (await finishNow(t, 'completed')) setSheet(null)
+  }
+
+  const restore = async (c: Completion) => {
+    if (!data) return
     try {
-      const cs = planFinish(data.tasks, data.categories, t.id, 'completed')
-      removed = cs.deletes
-      markOwnRemovals(removed)
-      await store.commit(`complete:${t.id}`, cs)
-      const next = nextOccurrenceDate(t)
-      setToast(next ? `Completed — next due ${next}.` : 'Completed.')
+      const cs = planRestore(data.tasks, data.categories, c)
+      await store.commit(`restore:${c.id}`, cs)
+      const parent = cs.inserts[0].parentId ? data.tasks.find((t) => t.id === cs.inserts[0].parentId) : undefined
+      setToast(parent ? `Restored under “${parent.title}”.` : 'Restored.')
+      setActionError(null)
+    } catch (e) {
+      report(e)
+    }
+  }
+
+  const deleteHistory = async (completionId: string) => {
+    setBusy(true)
+    try {
+      await store.commit(`history-delete:${completionId}`, planDeleteHistory(completionId))
+      setToast('Deleted from history.')
       setSheet(null)
       setActionError(null)
     } catch (e) {
-      unmarkOwnRemovals(removed)
       report(e)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const exportAs = (kind: 'json' | 'csv') => {
+    if (!data) return
+    try {
+      const stamp = todayISO()
+      if (kind === 'json') downloadText(`horizon-tasks-${stamp}.json`, toExportJSON(data, new Date().toISOString()), 'application/json')
+      else downloadText(`horizon-tasks-${stamp}.csv`, toCSV(data), 'text/csv')
+      setToast('Export ready — check your downloads.')
+    } catch (e) {
+      setActionError(`Export failed: ${(e as Error).message}`)
     }
   }
 
@@ -159,7 +243,7 @@ export function Main({ email }: { email: string }) {
           <span className="tag">tasks</span>
         </div>
         {overdueCount > 0 && (
-          <button className="overdue-pill" onClick={() => setTab('daily')}>
+          <button className="overdue-pill" onClick={() => setSheet({ kind: 'overdue' })}>
             <span className="dot" />
             {overdueCount} overdue
           </button>
@@ -189,7 +273,20 @@ export function Main({ email }: { email: string }) {
           <Dashboard data={data} today={today} onOpen={open} onComplete={complete} onAddOn={addOn} onGoForever={() => setTab('forever')} />
         )}
         {tab === 'daily' && <Daily data={data} today={today} onOpen={open} onComplete={complete} />}
+        {tab === 'weekly' && <Weekly data={data} today={today} onOpen={open} onComplete={complete} onAddOn={addOn} />}
+        {tab === 'monthly' && <Monthly data={data} today={today} onOpen={open} onComplete={complete} onAddOn={addOn} />}
         {tab === 'forever' && <Forever data={data} today={today} onOpen={open} onComplete={complete} />}
+        {tab === 'later' && <Later data={data} today={today} onOpen={open} onComplete={complete} onAddOn={addOn} />}
+        {tab === 'history' && (
+          <History
+            data={data}
+            onRestore={(c) => void restore(c)}
+            onDelete={(c) => setSheet({ kind: 'confirmHistoryDelete', completionId: c.id })}
+            onExportJSON={() => exportAs('json')}
+            onExportCSV={() => exportAs('csv')}
+            onImport={() => setSheet({ kind: 'import' })}
+          />
+        )}
       </main>
 
       <footer className="footer muted small">
@@ -199,8 +296,21 @@ export function Main({ email }: { email: string }) {
         </button>
       </footer>
 
-      <button className="fab" aria-label="Add task" onClick={() => setSheet({ kind: 'form' })}>
-        +
+      {fabMenu && (
+        <>
+          <div className="fab-scrim" onClick={() => setFabMenu(false)} />
+          <div className="fab-menu" role="menu">
+            <button className="fab-menu-item" role="menuitem" onClick={() => { setFabMenu(false); setSheet({ kind: 'quickAdd' }) }}>
+              Quick add
+            </button>
+            <button className="fab-menu-item primary" role="menuitem" onClick={() => { setFabMenu(false); setSheet({ kind: 'form' }) }}>
+              Add task
+            </button>
+          </div>
+        </>
+      )}
+      <button className="fab" aria-label="Add task" aria-expanded={fabMenu} aria-haspopup="menu" onClick={() => setFabMenu((m) => !m)}>
+        {fabMenu ? '×' : '+'}
       </button>
 
       {sheet?.kind === 'detail' && find(sheet.id) && (
@@ -275,6 +385,42 @@ export function Main({ email }: { email: string }) {
           error={actionError}
           onConfirm={() => void remove(find(sheet.id)!)}
           onCancel={() => setSheet({ kind: 'detail', id: sheet.id })}
+        />
+      )}
+
+      {sheet?.kind === 'overdue' && (
+        <OverduePopup data={data} today={today} error={actionError} onFinish={finishNow} onClose={() => { setSheet(null); setActionError(null) }} />
+      )}
+
+      {sheet?.kind === 'quickAdd' && <QuickAdd data={data} store={store} onClose={close} onSaved={setToast} />}
+
+      {sheet?.kind === 'import' && (
+        <ImportSheet
+          data={data}
+          store={store}
+          onClose={close}
+          onDone={(msg) => {
+            setToast(msg)
+            setSheet(null)
+          }}
+        />
+      )}
+
+      {sheet?.kind === 'confirmHistoryDelete' && data.completions.some((c) => c.id === sheet.completionId) && (
+        <Confirm
+          title="Delete permanently?"
+          body={
+            <p>
+              “{data.completions.find((c) => c.id === sheet.completionId)!.snapshot.title}” will be removed from History for good.
+              This can't be undone (Restore instead if you want it back as a task).
+            </p>
+          }
+          confirmLabel="Delete forever"
+          danger
+          busy={busy}
+          error={actionError}
+          onConfirm={() => void deleteHistory(sheet.completionId)}
+          onCancel={close}
         />
       )}
 

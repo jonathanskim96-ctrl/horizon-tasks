@@ -161,6 +161,20 @@ export function planCreate(value: Omit<Task, 'id' | 'createdAt'>, env: Env = def
   return cs
 }
 
+/** Create several tasks in one atomic write (Quick Add). */
+export function planCreateMany(values: Omit<Task, 'id' | 'createdAt'>[], env: Env = defaultEnv): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.inserts = values.map((v) => ({ ...v, id: env.newId(), createdAt: env.now() }))
+  return cs
+}
+
+/** Permanently delete one History entry (the only irreversible action). */
+export function planDeleteHistory(completionId: string): ChangeSet {
+  const cs = emptyChangeSet()
+  cs.historyDeletes.push(completionId)
+  return cs
+}
+
 /** Replace a task's editable fields with validated ones. */
 export function planUpdate(existing: Task, value: Omit<Task, 'id' | 'createdAt'>): ChangeSet {
   const cs = emptyChangeSet()

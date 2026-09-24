@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyLocal } from '../domain/actions'
-import { nextCategoryColor } from '../domain/categories'
+import { nextCategoryColor, safeColor } from '../domain/categories'
 import type { Category, ChangeSet, Snapshot } from '../domain/types'
 import { validateCategoryName } from '../domain/validate'
 import { applyChanges, createCategory, loadAll, seedStarterCategories } from './api'
@@ -46,9 +46,14 @@ export function useStore() {
       if (document.visibilityState === 'visible') void reload()
     }
     document.addEventListener('visibilitychange', onVisible)
+    // …and poll gently while visible, so an open app catches up on its own.
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void reload()
+    }, 60_000)
     return () => {
       cancelled = true
       document.removeEventListener('visibilitychange', onVisible)
+      window.clearInterval(poll)
     }
   }, [reload])
 
@@ -64,11 +69,11 @@ export function useStore() {
   )
 
   const addCategory = useCallback(
-    (name: string, existing: Category[]) =>
+    (name: string, existing: Category[], color?: string) =>
       guardedWrite(`category:${name.trim().toLowerCase()}`, async () => {
         const err = validateCategoryName(name, existing)
         if (err) throw new Error(err)
-        const cat = await createCategory(name.trim(), nextCategoryColor(existing), existing.length)
+        const cat = await createCategory(name.trim(), safeColor(color, nextCategoryColor(existing)), existing.length)
         writes.current++
         setData((d) => (d ? { ...d, categories: [...d.categories, cat] } : d))
         return cat

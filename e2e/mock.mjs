@@ -39,7 +39,14 @@ export function createMock() {
     }
     return json({})
   }
-  return { db, faults, calls, handler }
+  /** Pre-populate before the app loads (starter categories + task rows). */
+  function seed(tasks = []) {
+    ;['MPH', 'Core Lab', 'KFAM', 'Admin', 'Financial', 'Other'].forEach((name, i) =>
+      db.categories.push({ id: `cat-${i}`, name, color: ['#5b8cff', '#34c2b0', '#f2b84b', '#a687f0', '#4caf7d', '#8b929c'][i], sort_order: i }))
+    for (const t of tasks)
+      db.tasks.push({ notes: '', ongoing: false, checklist: [], parent_id: null, depth: 0, recurrence_every_n_days: null, recurrence_end_date: null, created_at: new Date().toISOString(), category_id: 'cat-3', priority: 3, ...t })
+  }
+  return { db, faults, calls, handler, seed }
 }
 
 export const session = (uid) => JSON.stringify({

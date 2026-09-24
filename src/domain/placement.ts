@@ -29,6 +29,11 @@ export const inForever = (t: Task) => t.ongoing
 /** Per-day counts for a calendar month grid. */
 export function monthCounts(tasks: Task[], anyDayInMonth: ISODate, today: ISODate) {
   const { start, end } = monthBounds(anyDayInMonth)
+  return dayCounts(tasks, start, end, today)
+}
+
+/** Per-day task counts (and how many are overdue) between two dates inclusive. */
+export function dayCounts(tasks: Task[], start: ISODate, end: ISODate, today: ISODate) {
   const days: Record<ISODate, { total: number; overdue: number }> = {}
   for (const t of tasks) {
     if (!t.dueDate || t.dueDate < start || t.dueDate > end) continue

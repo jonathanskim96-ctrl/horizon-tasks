@@ -138,6 +138,53 @@ button.link { background: none; border: 0; color: var(--accent); padding: 0 4px;
 .error-toast { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); border-radius: var(--radius-sm); }
 
 @media (min-width: 700px) {
+  .tabs { flex-wrap: wrap; overflow: visible; }
+  /* keep the + button beside the content column instead of on top of it */
+  .fab { right: max(20px, calc(50vw - 320px - 84px)); }
+  .fab-menu { right: max(20px, calc(50vw - 320px - 84px)); }
   .overlay { align-items: center; }
   .sheet { border-radius: 18px; max-height: 85vh; border: 1px solid var(--border); }
 }
+
+/* view toggle (Weekly / Monthly) */
+.view-toggle { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px; text-transform: none; letter-spacing: 0; }
+.view-toggle button { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
+.view-toggle button.active { background: var(--surface-3); color: var(--text); }
+.cal-nav .cal-today { font-size: 18px; line-height: 1; }
+
+/* history */
+.hist-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 12px; display: flex; align-items: center; gap: 10px; }
+.hist-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.skip-badge { background: var(--surface-3); color: var(--muted); }
+.panel-title .pill-row { text-transform: none; letter-spacing: 0; }
+.panel-title .pill { padding: 5px 10px; font-size: 12px; }
+
+/* overdue popup */
+.popup-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; }
+.popup-meta { font-size: 12px; color: var(--overdue); margin: 4px 0 10px; }
+.popup-actions { display: flex; gap: 6px; }
+.popup-actions button { flex: 1; padding: 9px 6px; min-height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-3); font-size: 12.5px; font-weight: 700; }
+.popup-actions button.complete { background: var(--good); border-color: var(--good); color: #06170e; }
+.popup-actions button.skip { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.popup-actions button:disabled { opacity: .5; }
+.warn-box { background: var(--overdue-dim); border: 1px solid color-mix(in srgb, var(--overdue) 40%, transparent); color: var(--overdue); border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 8px; }
+
+/* quick add */
+.qa-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px; background: var(--surface-2); }
+.qa-row.has-error { border-color: var(--overdue); }
+.qa-row input[type=text], .qa-fields input, .qa-fields select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+.qa-fields { display: grid; grid-template-columns: minmax(0, 1.25fr) 62px minmax(0, 1fr); gap: 6px; margin-top: 6px; }
+.qa-fields select { padding: 9px 6px; font-size: 14px; }
+.qa-fields input[type=date] { min-width: 0; font-size: 14px; padding: 9px 6px; }
+
+/* FAB menu */
+.fab-scrim { position: fixed; inset: 0; z-index: 29; }
+.fab-menu { position: fixed; right: max(20px, calc(50vw - 300px)); bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 31; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.fab-menu-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 18px; font-size: 14px; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.fab-menu-item.primary { background: var(--accent); border-color: var(--accent); color: #08101f; }
+
+/* import */
+.import-preview { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 12px; }
+.import-preview ul { margin: 6px 0; padding-left: 18px; }
+.import-preview summary { cursor: pointer; color: var(--muted); }
+input[type=file] { margin: 10px 0; color: var(--muted); max-width: 100%; }
