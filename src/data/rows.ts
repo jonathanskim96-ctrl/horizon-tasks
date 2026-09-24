@@ -2,6 +2,9 @@
 // Anything read from the database is normalized defensively, so a malformed
 // row can never crash rendering or inject non-text into the UI.
 import type { ChangeSet, ChecklistItem, Completion, Outcome, Task, TaskSnapshot } from '../domain/types'
+import { normalizeChecklist, normalizeSnapshot, str } from '../domain/normalize'
+
+export { normalizeChecklist, normalizeSnapshot }
 
 export interface TaskRow {
   id: string
@@ -27,44 +30,6 @@ export interface CompletionRow {
   due_date: string | null
   completed_at: string
   snapshot: TaskSnapshot
-}
-
-const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : fallback)
-const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null)
-const int = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isInteger(v) ? v : fallback)
-
-export function normalizeChecklist(v: unknown): ChecklistItem[] {
-  if (!Array.isArray(v)) return []
-  return v
-    .filter((i): i is Record<string, unknown> => typeof i === 'object' && i !== null)
-    .map((i) => ({ text: str(i.text), done: i.done === true }))
-}
-
-function normalizeRecurrence(v: unknown): Task['recurrence'] {
-  if (typeof v !== 'object' || v === null) return null
-  const r = v as Record<string, unknown>
-  const n = int(r.everyNDays, 0)
-  return n > 0 ? { everyNDays: n, endDate: strOrNull(r.endDate) } : null
-}
-
-export function normalizeSnapshot(v: unknown): TaskSnapshot {
-  const s = (typeof v === 'object' && v !== null ? v : {}) as Record<string, unknown>
-  return {
-    title: str(s.title, '(untitled)'),
-    notes: str(s.notes),
-    priority: int(s.priority, 3),
-    categoryId: str(s.categoryId),
-    categoryName: str(s.categoryName, '(unknown category)'),
-    categoryColor: str(s.categoryColor, '#8b929c'),
-    ongoing: s.ongoing === true,
-    dueDate: strOrNull(s.dueDate),
-    checklist: normalizeChecklist(s.checklist),
-    parentId: strOrNull(s.parentId),
-    parentTitle: strOrNull(s.parentTitle),
-    depth: int(s.depth, 0),
-    recurrence: normalizeRecurrence(s.recurrence),
-    createdAt: str(s.createdAt),
-  }
 }
 
 export const taskFromRow = (r: TaskRow): Task => ({

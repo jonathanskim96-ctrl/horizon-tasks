@@ -16,7 +16,7 @@ const PAGE = 100
 
 export function History({ data, onRestore, onDelete, onExportJSON, onExportCSV, onImport }: Props) {
   const [shown, setShown] = useState(PAGE)
-  const items = [...data.completions].sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+  const items = [...data.completions].sort((a, b) => Date.parse(b.completedAt) - Date.parse(a.completedAt))
   return (
     <>
       <div className="panel-title">

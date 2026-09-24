@@ -2,6 +2,7 @@
 // that the `apply_changes` RPC applies atomically. No I/O here.
 import { addDays, diffDays } from './dates'
 import { descendantsOf } from './placement'
+import { validateTask } from './validate'
 import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type Completion, type ISODate, type Outcome, type Snapshot, type Task, type TaskSnapshot } from './types'
 
 export interface Env {
@@ -124,27 +125,32 @@ export function planDelete(tasks: Task[], taskId: string): ChangeSet {
 export function planRestore(tasks: Task[], categories: Category[], c: Completion, env: Env = defaultEnv): ChangeSet {
   if (tasks.some((t) => t.id === c.taskId)) throw new Error('This task is already active.')
   if (!categories.some((cat) => cat.id === c.snapshot.categoryId))
-    throw new Error(`Its category “${c.snapshot.categoryName}” no longer exists — recreate it or pick another first.`)
-  const parent = c.parentId ? tasks.find((t) => t.id === c.parentId) : undefined
-  const attach = parent && parent.depth + 1 <= MAX_DEPTH ? parent : undefined
+    throw new Error(`Its category “${c.snapshot.categoryName}” no longer exists, so it can't be restored.`)
   const s = c.snapshot
+  const input = {
+    title: s.title, notes: s.notes, priority: s.priority, categoryId: s.categoryId, ongoing: s.ongoing,
+    dueDate: s.dueDate, checklist: s.checklist, recurrence: s.recurrence,
+  }
+  // Reattach under the original parent when it still exists and the result is
+  // valid (depth, due date ≤ parent's); otherwise restore at top level.
+  const parent = c.parentId ? tasks.find((t) => t.id === c.parentId) : undefined
+  let r = parent ? validateTask({ ...input, parentId: parent.id }, { categories, tasks }) : null
+  if (!r || !r.ok) r = validateTask({ ...input, parentId: null }, { categories, tasks })
+  if (!r.ok) throw new Error(`It can't be restored: ${Object.values(r.errors).join(' ')}`)
   const cs = emptyChangeSet()
-  cs.inserts.push({
-    id: c.taskId,
-    title: s.title,
-    notes: s.notes,
-    priority: s.priority,
-    categoryId: s.categoryId,
-    ongoing: s.ongoing,
-    dueDate: s.dueDate,
-    checklist: s.checklist.map((i) => ({ ...i })),
-    parentId: attach?.id ?? null,
-    depth: attach ? attach.depth + 1 : 0,
-    recurrence: s.recurrence ? { ...s.recurrence } : null,
-    createdAt: env.now(),
-  })
+  cs.inserts.push({ ...r.value, id: c.taskId, createdAt: env.now() })
   cs.historyDeletes.push(c.id)
   return cs
+}
+
+/** Why a restore didn't reattach under its original parent (null if it did or had none). */
+export function restoreDetachReason(tasks: Task[], c: Completion, restored: Task): string | null {
+  if (!c.parentId || restored.parentId) return null
+  const parent = tasks.find((t) => t.id === c.parentId)
+  if (!parent) return null
+  return parent.depth + 1 > MAX_DEPTH
+    ? `“${parent.title}” is nested too deep`
+    : `it's due after “${parent.title}”${parent.dueDate ? ` (${parent.dueDate})` : ''}`
 }
 
 /** "X of Y done" for direct children of the current occurrence only. */

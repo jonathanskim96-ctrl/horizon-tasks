@@ -48,17 +48,20 @@ export function ImportSheet({ data, store, onClose, onDone }: Props) {
     if (!parsed) return
     setWorking(true)
     setError(null)
+    const createdCats: string[] = []
     try {
       let categories = data.categories
       for (const c of missingCategories(parsed, categories)) {
         const created = await store.addCategory(c.name, categories, c.color)
         categories = [...categories, created]
+        createdCats.push(created.name)
       }
       const plan = planImport(parsed, { ...data, categories }, defaultEnv)
       await store.commit('import', plan.changeSet)
       onDone(`Imported ${plan.counts.tasks} task(s) and ${plan.counts.completions} history entr${plan.counts.completions === 1 ? 'y' : 'ies'}.`)
     } catch (e) {
-      setError(`Import failed, nothing was imported: ${(e as Error).message}`)
+      const cats = createdCats.length ? ` (the new categories ${createdCats.join(', ')} were already created)` : ''
+      setError(`Import failed — no tasks or history were added${cats}: ${(e as Error).message}`)
     } finally {
       setWorking(false)
     }

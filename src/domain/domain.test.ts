@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
 import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, sortForever, sortTasks, breadcrumb } from './placement'
 import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
-import { applyLocal, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
+import { applyLocal, restoreDetachReason, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
 import type { Category, Snapshot, Task } from './types'
 
@@ -179,6 +179,19 @@ describe('recurrence & actions', () => {
     expect(back.historyDeletes).toEqual([done.id])
     expect(planRestore([], cats, done, env).inserts[0]).toMatchObject({ parentId: null, depth: 0 })
     expect(() => planRestore([], [], done, env)).toThrow(/category/)
+  })
+  it('restore never breaks the subtask date rule: detaches with a reason instead', () => {
+    const parent = mk({ id: 'p', dueDate: '2026-10-10' })
+    const done = planFinish([parent, mk({ id: 'c', parentId: 'p', depth: 1, dueDate: '2026-10-08' })], cats, 'c', 'completed', env).completions[0]
+    // Parent later moved earlier than the completed subtask's due date.
+    const moved = { ...parent, dueDate: '2026-10-01' }
+    const cs = planRestore([moved], cats, done, env)
+    expect(cs.inserts[0]).toMatchObject({ parentId: null, depth: 0 })
+    expect(restoreDetachReason([moved], done, cs.inserts[0])).toMatch(/due after “p”/)
+    // Still valid → reattached, no reason.
+    const ok = planRestore([parent], cats, done, env)
+    expect(ok.inserts[0].parentId).toBe('p')
+    expect(restoreDetachReason([parent], done, ok.inserts[0])).toBe(null)
   })
   it('counts direct-children progress', () => {
     const tasks = [mk({ id: 'p' }), mk({ id: 'a', parentId: 'p', depth: 1 }), mk({ id: 'b', parentId: 'p', depth: 1 })]

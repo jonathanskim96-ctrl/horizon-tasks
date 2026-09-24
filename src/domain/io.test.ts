@@ -64,7 +64,17 @@ describe('export', () => {
     expect(plan.counts).toMatchObject({ tasks: 1, completions: 1, skipped: 0 })
     const t = plan.changeSet.inserts[0]
     expect(t).toMatchObject({ title: 'A', priority: 2, recurrence: { everyNDays: 7, endDate: null }, checklist: [{ text: 'i', done: false }] })
-    expect(plan.changeSet.completions[0].snapshot).toMatchObject({ title: 'B', categoryName: 'Admin' })
+    expect(plan.changeSet.completions[0].snapshot).toMatchObject({ title: 'B', categoryName: 'Admin', ongoing: true })
+    expect(t.createdAt).toBe(s.tasks[0].createdAt) // original creation time kept
+  })
+  it('round-trips history snapshot details (checklist, recurrence) from our own export', () => {
+    let s: Snapshot = empty
+    s = applyLocal(s, planCreateMany([{ title: 'R', notes: '', priority: 1, categoryId: 'c-mph', ongoing: false, dueDate: '2026-10-01', checklist: [{ text: 'a', done: true }], parentId: null, depth: 0, recurrence: { everyNDays: 3, endDate: '2026-12-01' } }], env))
+    s = applyLocal(s, planFinish(s.tasks, s.categories, s.tasks[0].id, 'completed', env))
+    const plan = planImport(parseImport(toExportJSON(s, env.now())), { ...empty, tasks: [] }, env)
+    const snap = plan.changeSet.completions.find((c) => c.snapshot.title === 'R')!.snapshot
+    expect(snap.checklist).toEqual([{ text: 'a', done: true }])
+    expect(snap.recurrence).toEqual({ everyNDays: 3, endDate: '2026-12-01' })
   })
   it('permanent history delete plans exactly one delete', () => {
     expect(planDeleteHistory('h').historyDeletes).toEqual(['h'])

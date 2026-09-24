@@ -5,7 +5,10 @@
 import { execFileSync } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { applyLocal, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, type Env } from '../../src/domain/actions'
+import { applyLocal, planCreate, planCreateMany, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist, planUpdate, type Env } from '../../src/domain/actions'
+import { toExportJSON } from '../../src/domain/exporting'
+import { missingCategories, parseImport, planImport } from '../../src/domain/importing'
+import { validateQuickAdd } from '../../src/domain/validate'
 import { STARTER_CATEGORIES } from '../../src/domain/categories'
 import type { ChangeSet, Snapshot } from '../../src/domain/types'
 import { validateTask } from '../../src/domain/validate'
@@ -144,5 +147,52 @@ describe.skipIf(!enabled)('app ↔ database contract', () => {
     const after = applyLocal(local, cs)
     // …and it can still be completed (snapshot carries notes + checklist).
     rpc(planFinish(after.tasks, after.categories, cs.inserts[0].id, 'completed', env))
+  })
+
+  it('quick add, permanent history delete and a full import round-trip through the DB', () => {
+    let local = readBack()
+    const cat = local.categories[1].id
+    const apply = (cs: ChangeSet) => {
+      rpc(cs)
+      local = applyLocal(local, cs)
+      expectSame(readBack(), local)
+    }
+    // Quick add: 3 rows in one atomic write.
+    const qa = validateQuickAdd(
+      [
+        { title: 'Q1', dueDate: '2026-11-01', priority: 1, categoryId: cat },
+        { title: '', dueDate: '', priority: '', categoryId: '' },
+        { title: 'Q2 界', dueDate: '2026-11-02', priority: 5, categoryId: cat },
+      ],
+      { categories: local.categories, tasks: local.tasks },
+    )
+    if (!qa.ok) throw new Error('quick add invalid')
+    apply(planCreateMany(qa.values, env))
+    // Complete one, then permanently delete that history entry.
+    apply(planFinish(local.tasks, local.categories, local.tasks.find((t) => t.title === 'Q1')!.id, 'completed', env))
+    const h = local.completions.find((c) => c.snapshot.title === 'Q1')!
+    apply(planDeleteHistory(h.id))
+    expect(local.completions.some((c) => c.id === h.id)).toBe(false)
+
+    // Export everything, import into a brand-new account: same data comes back.
+    const OTHER = '00000000-0000-0000-0000-0000000000dd'
+    psql(`insert into auth.users values ('${OTHER}') on conflict do nothing;`)
+    const exported = toExportJSON(local, env.now())
+    const asOther = (body: string) => psql(`set role authenticated; set request.jwt.claim.sub = '${OTHER}';\n${body}`)
+    asOther(`select public.seed_starter_categories(${lit(STARTER_CATEGORIES)});`)
+    const otherCats = JSON.parse(asOther(`select coalesce(json_agg(c order by sort_order), '[]') from public.categories c;`)).map(
+      (r: { id: string; name: string; color: string; sort_order: number }) => ({ id: r.id, name: r.name, color: r.color, sortOrder: r.sort_order }),
+    )
+    const parsed = parseImport(exported)
+    expect(missingCategories(parsed, otherCats)).toEqual([])
+    const plan = planImport(parsed, { tasks: [], categories: otherCats, completions: [] }, env)
+    const a = changeSetToArgs(plan.changeSet)
+    asOther(`select public.apply_changes(inserts => ${lit(a.inserts)}, completions => ${lit(a.completions)});`)
+    const count = (table: string) => Number(asOther(`select count(*) from public.${table};`))
+    expect(count('tasks')).toBe(local.tasks.length)
+    expect(count('completions')).toBe(local.completions.length)
+    // Importing the same file again adds nothing.
+    const again = planImport(parsed, { tasks: plan.changeSet.inserts, categories: otherCats, completions: plan.changeSet.completions }, env)
+    expect(again.counts.tasks + again.counts.completions).toBe(0)
   })
 })

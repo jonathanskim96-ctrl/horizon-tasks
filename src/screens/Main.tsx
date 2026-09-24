@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { signOut } from '../auth/useSession'
 import { useStore } from '../data/useStore'
 import { BusyError } from '../data/writeGuard'
-import { nextOccurrenceDate, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist } from '../domain/actions'
+import { nextOccurrenceDate, planDelete, planDeleteHistory, planFinish, planRestore, planToggleChecklist, restoreDetachReason } from '../domain/actions'
 import { todayISO } from '../domain/dates'
 import { toCSV, toExportJSON } from '../domain/exporting'
 import { descendantsOf, isOverdue } from '../domain/placement'
@@ -109,6 +109,8 @@ export function Main({ email }: { email: string }) {
   const unmarkOwnRemovals = (ids: string[]) => setOwnRemovals((s) => new Set([...s].filter((id) => !ids.includes(id))))
   const sheetTaskGone =
     !!data && !!sheetTaskId && !data.tasks.some((t) => t.id === sheetTaskId) && !ownRemovals.has(sheetTaskId)
+  const historyGone = sheet?.kind === 'confirmHistoryDelete' && !!data && !data.completions.some((c) => c.id === sheet.completionId)
+  if (historyGone) setSheet(null)
   if (sheetTaskGone) {
     // React's "adjust state during render" pattern (no effect round-trip).
     setSheet(null)
@@ -155,8 +157,10 @@ export function Main({ email }: { email: string }) {
     try {
       const cs = planRestore(data.tasks, data.categories, c)
       await store.commit(`restore:${c.id}`, cs)
-      const parent = cs.inserts[0].parentId ? data.tasks.find((t) => t.id === cs.inserts[0].parentId) : undefined
-      setToast(parent ? `Restored under “${parent.title}”.` : 'Restored.')
+      const restored = cs.inserts[0]
+      const parent = restored.parentId ? data.tasks.find((t) => t.id === restored.parentId) : undefined
+      const detached = restoreDetachReason(data.tasks, c, restored)
+      setToast(parent ? `Restored under “${parent.title}”.` : detached ? `Restored as a top-level task — ${detached}.` : 'Restored.')
       setActionError(null)
     } catch (e) {
       report(e)

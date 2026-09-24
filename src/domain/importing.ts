@@ -6,7 +6,8 @@ import { isValidISODate } from './dates'
 import { nextCategoryColor, safeColor } from './categories'
 import type { Env } from './actions'
 import { EXPORT_APP } from './exporting'
-import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type Completion, type Snapshot, type Task } from './types'
+import { normalizeChecklist, normalizeRecurrence } from './normalize'
+import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type ChecklistItem, type Completion, type Recurrence, type Snapshot, type Task } from './types'
 import { validateCategoryName, validateTask } from './validate'
 
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024
@@ -14,12 +15,15 @@ export const MAX_IMPORT_ITEMS = 1000 // matches the apply_changes batch cap
 
 interface RawCategory { name: string; color: string }
 interface RawTask {
+  createdAt: string | null
   srcId: string; title: unknown; notes: unknown; priority: unknown; categoryName: string; ongoing: unknown
   dueDate: unknown; checklist: unknown; srcParentId: string | null; recurrence: { everyNDays: unknown; endDate?: unknown } | null
 }
 interface RawCompletion {
   srcTaskId: string | null; srcParentId: string | null; title: string; notes: string; priority: number; categoryName: string
   dueDate: string | null; completedAt: string; outcome: 'completed' | 'skipped'; parentTitle: string | null
+  /** Extra snapshot detail, present in this app's own exports. */
+  checklist: ChecklistItem[]; recurrence: Recurrence | null; ongoing: boolean; createdAt: string
 }
 export interface ParsedImport {
   format: 'artifact-v4' | 'horizon-tasks'
@@ -62,6 +66,7 @@ export function parseImport(text: string): ParsedImport {
     .map((o) => {
       const r = obj(o.recurrence)
       return {
+        createdAt: typeof o.createdAt === 'string' && !Number.isNaN(Date.parse(o.createdAt)) ? new Date(o.createdAt).toISOString() : null,
         srcId: str(o.id),
         title: o.title, notes: o.notes, priority: o.priority,
         categoryName: catName.get(str(o.categoryId)) ?? '',
@@ -87,6 +92,10 @@ export function parseImport(text: string): ParsedImport {
       completedAt: isValidISODate(at) ? `${at}T12:00:00.000Z` : !Number.isNaN(Date.parse(at)) ? new Date(at).toISOString() : '',
       outcome: o.outcome === 'skipped' ? 'skipped' : 'completed',
       parentTitle: strOrNull(s.parentTitle),
+      checklist: ours ? normalizeChecklist(s.checklist).filter((i) => i.text.length <= 500).slice(0, 100) : [],
+      recurrence: ours ? normalizeRecurrence(s.recurrence) : null,
+      ongoing: ours && s.ongoing === true,
+      createdAt: ours && typeof s.createdAt === 'string' && !Number.isNaN(Date.parse(s.createdAt)) ? new Date(s.createdAt).toISOString() : '',
     }
   })
   return { format: ours ? 'horizon-tasks' : 'artifact-v4', categories, tasks, completions }
@@ -176,7 +185,7 @@ export function planImport(p: ParsedImport, current: Snapshot, env: Env): Import
       notes.push(`Skipped ${label(t)}: ${Object.values(r.errors).join(' ')}`)
       continue
     }
-    const task: Task = { ...r.value, id: env.newId(), createdAt: env.now() }
+    const task: Task = { ...r.value, id: env.newId(), createdAt: t.createdAt ?? env.now() }
     if (t.srcId) newId.set(t.srcId, task.id)
     accepted.push(task)
   }
@@ -197,8 +206,8 @@ export function planImport(p: ParsedImport, current: Snapshot, env: Env): Import
       snapshot: {
         title: c.title.slice(0, 500), notes: c.notes.slice(0, 20000), priority: c.priority,
         categoryId: cat?.id ?? '', categoryName: cat?.name ?? (c.categoryName || '(unknown category)'), categoryColor: cat?.color ?? '#8b929c',
-        ongoing: false, dueDate: c.dueDate, checklist: [], parentId, parentTitle: c.parentTitle, depth: parentId ? 1 : 0,
-        recurrence: null, createdAt: c.completedAt,
+        ongoing: c.ongoing, dueDate: c.dueDate, checklist: c.checklist, parentId, parentTitle: c.parentTitle, depth: parentId ? 1 : 0,
+        recurrence: c.recurrence, createdAt: c.createdAt || c.completedAt,
       },
     }
     cs.completions.push(entry)
