@@ -39,8 +39,7 @@ This step pastes one file of database instructions (SQL) into Supabase and runs 
 It creates the four tables the app uses and the security rules that keep them private to you.
 
 1. **Open the SQL file as plain text.** In a new browser tab, open:
-   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0001_init.sql`
-   (after this code is merged to `main`, replace the branch name with `main`).
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0001_init.sql`
    You'll see a page of plain text starting with `-- Horizon Tasks schema v1.`
 2. **Copy all of it.** Click anywhere in the text, press **Ctrl + A** (Mac: **Cmd + A**)
    to select everything, then **Ctrl + C** (Mac: **Cmd + C**) to copy.
@@ -67,24 +66,24 @@ It creates the four tables the app uses and the security rules that keep them pr
    **profiles** and **tasks**, all empty. Categories get created on your first sign-in.
 
 8. **Run the second file the same way.** Repeat steps 1–6 with
-   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0002_hardening.sql`
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0002_hardening.sql`
    (security tightening: signed-out visitors get no access at all, plus size limits).
    It may show the same warning, because it removes permissions. Click **Run query**.
    Expect **"Success. No rows returned."**
 
 9. **And the third file**, the same way:
-   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0003_limits_and_shapes.sql`
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0003_limits_and_shapes.sql`
    (fixes size limits for long non-English text, stricter data checks). Expect
    the same warning (it replaces a function and two limits) → **Run query** →
    "Success. No rows returned."
 
 10. **And the fourth file**, the same way:
-   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0004_stale_write_guard.sql`
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0004_stale_write_guard.sql`
    (stops a task completed on two devices from being recorded twice). Same
    warning → **Run query** → "Success. No rows returned."
 
 11. **And the fifth file**, the same way:
-   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/claude/horizon-tasks-pwa-rebuild-3bnzjv/supabase/migrations/0005_realtime.sql`
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0005_realtime.sql`
    (turns on instant sync between your devices). → **Run query** → "Success. No rows returned."
 
 Each migration file runs **once**, in number order. Future changes will arrive as new files
