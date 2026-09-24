@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { registerServiceWorker } from './sw-register'
 
 const root = createRoot(document.getElementById('root')!)
 // Clickjacking defense: GitHub Pages can't send frame-blocking headers, so
@@ -9,6 +10,7 @@ const root = createRoot(document.getElementById('root')!)
 if (window.top !== window.self) {
   root.render(<p style={{ padding: 16 }}>Horizon Tasks can't be embedded. Open it directly.</p>)
 } else {
+  registerServiceWorker()
   root.render(
     <StrictMode>
       <App />

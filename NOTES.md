@@ -148,6 +148,15 @@ offline changes syncing in order, sign-out erasing the device copy (and no
 tokens in it), 320px layouts (fixed cramped category rows), published bundle
 re-inspected (wss only, no secrets/test code/maps).
 
+### App updates (fixed 2026-09-24)
+The service worker never auto-activated (vite-plugin-pwa emitted a
+SKIP_WAITING message handler, and nothing sent it), so new versions waited
+until every tab/home-screen instance was closed — users saw very old builds.
+Now: workbox skipWaiting + clientsClaim; src/sw-register.ts reloads if the
+takeover happens within 10 s of opening, otherwise shows a "Reload" banner;
+updates are checked on every return to the app. The footer shows the build
+(commit) id. e2e/update.mjs tests both paths with two real builds.
+
 ### Known gaps
 None from the spec. Possible later polish: category reordering, notifications.
 

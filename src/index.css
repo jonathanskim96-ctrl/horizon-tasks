@@ -207,3 +207,5 @@ input[type=file] { margin: 10px 0; color: var(--muted); max-width: 100%; }
 .cat-edit .btn-row { margin-top: 10px; }
 .pending-chip { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; }
 .topbar { flex-wrap: wrap; }
+.update-banner { background: var(--accent-dim); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; font-size: 13.5px; }
+.build-id { opacity: .7; margin-bottom: 4px; }

@@ -3,6 +3,7 @@ import { configError } from './data/supabase'
 import { signInWithGoogle, useSession } from './auth/useSession'
 import { Main } from './screens/Main'
 import { ErrorBanner } from './ui/Sheet'
+import { UPDATE_EVENT } from './sw-register'
 
 export default function App() {
   const { session, loading, authError } = useSession()
@@ -20,6 +21,21 @@ export default function App() {
       window.removeEventListener('error', onError)
     }
   }, [])
+  // A new version arrived while the app was in use: offer a reload.
+  const [updateReady, setUpdateReady] = useState(false)
+  useEffect(() => {
+    const on = () => setUpdateReady(true)
+    window.addEventListener(UPDATE_EVENT, on)
+    return () => window.removeEventListener(UPDATE_EVENT, on)
+  }, [])
+  const updateBanner = updateReady && (
+    <div className="update-banner" role="status">
+      A new version of Horizon is ready.
+      <button className="link" onClick={() => window.location.reload()}>
+        Reload
+      </button>
+    </div>
+  )
   const crashBanner = crash && <ErrorBanner message={`Something went wrong: ${crash}`} onRetry={() => setCrash(null)} retryLabel="Dismiss" />
 
   if (configError) return <Shell><ErrorBanner message={configError} /></Shell>
@@ -37,6 +53,7 @@ export default function App() {
     )
   return (
     <Shell>
+      {updateBanner}
       {crashBanner}
       <Main key={session.user.id} userId={session.user.id} email={session.user.email ?? ''} />
     </Shell>

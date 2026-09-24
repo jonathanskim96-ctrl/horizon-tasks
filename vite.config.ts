@@ -39,7 +39,9 @@ export default defineConfig(({ mode }) => ({
     contentSecurityPolicy(process.env.VITE_SUPABASE_URL ?? loadEnv(mode, process.cwd(), 'VITE_').VITE_SUPABASE_URL),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'privacy.html'],
+      // Registered by src/sw-register.ts (update handling), not an injected script.
+      injectRegister: false,
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Horizon Tasks',
         short_name: 'Horizon',
@@ -55,6 +57,12 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        // Take over as soon as a new version is installed (the page then
+        // reloads or offers a Reload — see src/sw-register.ts). Without these,
+        // updates wait until every tab/home-screen instance is fully closed.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Never cache Supabase API/auth responses in the service worker.
         navigateFallbackDenylist: [/^\/auth/],
       },

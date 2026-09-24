@@ -354,6 +354,7 @@ export function Main({ email, userId }: { email: string; userId: string }) {
       </main>
 
       <footer className="footer muted small">
+        <div className="build-id">build {(import.meta.env.VITE_BUILD_ID || 'dev').slice(0, 7)}</div>
         {email} ·{' '}
         <button className="link" onClick={() => setSheet({ kind: 'categories' })}>
           Categories

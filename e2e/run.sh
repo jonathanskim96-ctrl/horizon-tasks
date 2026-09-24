@@ -13,3 +13,11 @@ PREVIEW=$!
 trap 'kill $PREVIEW' EXIT
 sleep 2
 node e2e/suite.mjs
+# App-update flow: two builds (A → B) served by a tiny static server.
+UPD=$(mktemp -d)
+for v in a b; do
+  VITE_BUILD_ID=$(printf "$v%.0s" 1 2 3 4 5 6 7) VITE_SUPABASE_URL=http://mock.supabase.local VITE_SUPABASE_ANON_KEY=sb_publishable_test \
+    npx vite build --outDir "$UPD/$v" >/dev/null
+done
+node e2e/update.mjs "$UPD/a" "$UPD/b"
+rm -rf "$UPD"
