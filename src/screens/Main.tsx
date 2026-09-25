@@ -10,6 +10,7 @@ import { toCSV, toExportJSON } from '../domain/exporting'
 import { descendantsOf, isOverdue } from '../domain/placement'
 import type { Completion, ISODate, Outcome, Task } from '../domain/types'
 import { downloadText } from '../ui/download'
+import { useInstall } from '../install'
 import { ImportSheet } from '../ui/ImportSheet'
 import { OverduePopup } from '../ui/OverduePopup'
 import { QuickAdd } from '../ui/QuickAdd'
@@ -44,8 +45,20 @@ type SheetState =
   | { kind: 'import' }
   | { kind: 'categories' }
   | { kind: 'confirmSignOut' }
+  | { kind: 'installHelp' }
   | { kind: 'restorePick'; completionId: string }
   | null
+
+/**
+ * Home-screen shortcuts open the app at ?open=quickadd|new|daily. Read it once
+ * (whitelisted values only) and clean the address.
+ */
+function takeShortcut(): 'quickadd' | 'new' | 'daily' | null {
+  const v = new URLSearchParams(window.location.search).get('open')
+  if (v !== 'quickadd' && v !== 'new' && v !== 'daily') return null
+  window.history.replaceState(null, '', window.location.pathname)
+  return v
+}
 
 /** The active task a sheet is about, if any (History/overdue/quick-add sheets have none). */
 function sheetTask(sheet: SheetState): string | undefined {
@@ -81,8 +94,12 @@ export function Main({ email, userId }: { email: string; userId: string }) {
   const store = useStore(userId)
   const { data } = store
   const today = useToday()
-  const [tab, setTab] = useState<Tab>('dashboard')
-  const [sheet, setSheet] = useState<SheetState>(null)
+  const [shortcut] = useState(takeShortcut)
+  const [tab, setTab] = useState<Tab>(shortcut === 'daily' ? 'daily' : 'dashboard')
+  const [sheet, setSheet] = useState<SheetState>(
+    shortcut === 'quickadd' ? { kind: 'quickAdd' } : shortcut === 'new' ? { kind: 'form' } : null,
+  )
+  const installer = useInstall()
   const [toast, setToast] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -360,6 +377,17 @@ export function Main({ email, userId }: { email: string; userId: string }) {
           Categories
         </button>{' '}
         ·{' '}
+        {(installer.mode === 'prompt' || installer.mode === 'ios') && (
+          <>
+            <button
+              className="link"
+              onClick={() => (installer.mode === 'prompt' ? void installer.install() : setSheet({ kind: 'installHelp' }))}
+            >
+              Install app
+            </button>{' '}
+            ·{' '}
+          </>
+        )}
         <button className="link" onClick={() => (store.pending ? setSheet({ kind: 'confirmSignOut' }) : void doSignOut())}>
           Sign out
         </button>
@@ -473,6 +501,28 @@ export function Main({ email, userId }: { email: string; userId: string }) {
             setSheet(null)
           }}
         />
+      )}
+
+      {sheet?.kind === 'installHelp' && (
+        <Sheet title="Add Horizon to your Home Screen" onClose={close}>
+          <ol className="install-steps">
+            <li>
+              In <b>Safari</b>, tap the <b>Share</b> button (the square with an arrow pointing up) at the bottom of the screen.
+            </li>
+            <li>
+              Scroll down and tap <b>Add to Home Screen</b>.
+            </li>
+            <li>
+              Tap <b>Add</b>. Horizon now opens full-screen from its own icon, works offline, and keeps you signed in.
+            </li>
+          </ol>
+          <p className="muted small">Using Chrome on iPhone? Open this page in Safari first — only Safari can add apps to the Home Screen.</p>
+          <div className="btn-row">
+            <button className="btn primary" onClick={close}>
+              Got it
+            </button>
+          </div>
+        </Sheet>
       )}
 
       {sheet?.kind === 'confirmSignOut' && (

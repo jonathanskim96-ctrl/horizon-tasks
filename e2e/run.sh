@@ -13,6 +13,7 @@ PREVIEW=$!
 trap 'kill $PREVIEW' EXIT
 sleep 2
 node e2e/suite.mjs
+node e2e/pwa.mjs
 # App-update flow: two builds (A → B) served by a tiny static server.
 UPD=$(mktemp -d)
 for v in a b; do

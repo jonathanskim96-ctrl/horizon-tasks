@@ -146,8 +146,17 @@ Each migration file runs **once**, in number order. Future changes will arrive a
    app: click **Continue**.
 2. You should see **6 categories · 0 history**. In Supabase's Table Editor,
    `categories` now has MPH, Core Lab, KFAM, Admin, Financial and Other.
-3. **On your phone:** open the same address. On iPhone, tap Safari's **Share** →
-   **Add to Home Screen**. On Android, open Chrome's **⋮** menu → **Install app**.
+3. **Install it like an app** (phone or computer): open the same address and
+   tap **Install app** at the bottom of the page, or:
+   - **iPhone/iPad:** in **Safari**, tap **Share** → **Add to Home Screen** → **Add**.
+     (Chrome on iPhone can't add apps; use Safari.) Open it from the new icon
+     and sign in once more — Home Screen apps keep their own sign-in.
+   - **Android:** in Chrome, tap **Install app** at the bottom of the page, or
+     **⋮** → **Install app** / **Add to Home screen**.
+   - **Computer (Chrome/Edge):** click the install icon at the right end of the
+     address bar, or **Install app** at the bottom of the page.
+   Long-press the icon (right-click on a computer) for shortcuts: Quick add,
+   New task, Today.
 
 ## Part 7 — Lock the door
 

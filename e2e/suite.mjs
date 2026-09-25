@@ -8,8 +8,8 @@ const iso = (k = 0) => { const d = new Date(); d.setDate(d.getDate() + k); retur
 const results = []
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
 
-async function scenario(name, fn, { signedOut = false, serviceWorker = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: serviceWorker ? 'allow' : 'block' })
+async function scenario(name, fn, { signedOut = false, serviceWorker = false, userAgent, standalone = false } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: serviceWorker ? 'allow' : 'block', ...(userAgent ? { userAgent } : {}) })
   const page = await ctx.newPage()
   const mock = createMock()
   const errors = []
@@ -17,6 +17,11 @@ async function scenario(name, fn, { signedOut = false, serviceWorker = false } =
   page.on('console', (m) => m.type() === 'error' && !/Content Security Policy|Failed to load resource/.test(m.text()) && errors.push(m.text()))
   await page.route('http://mock.supabase.local/**', mock.handler)
   await page.routeWebSocket(/mock\.supabase\.local\/realtime/, mock.realtime)
+  if (standalone)
+    await page.addInitScript(() => {
+      const real = window.matchMedia.bind(window)
+      window.matchMedia = (q) => (q === '(display-mode: standalone)' ? { matches: true, media: q, addEventListener() {}, removeEventListener() {} } : real(q))
+    })
   if (!signedOut) await page.addInitScript((s) => { try { localStorage.setItem('sb-mock-auth-token', s) } catch {} }, session('11111111-1111-1111-1111-111111111111'))
   try {
     await fn({ page, mock, ctx })
@@ -169,8 +174,8 @@ await scenario('Parent cannot move earlier than its subtask', async ({ page }) =
   await boot(page)
   await newTask(page, { title: 'Parent', due: iso(5) })
   await page.getByText('Task added.', { exact: true }).waitFor()
-  await page.locator('.cal-cell', { has: page.locator('.cnt') }).first().click()
-  await row(page, 'Parent').click()
+  await page.getByRole('button', { name: 'Monthly' }).click() // 30-day list: works on any date
+  await exactRow(page, 'Parent').click()
   await page.getByRole('button', { name: '+ Add subtask' }).click()
   await dlg(page).locator('input[type=text]').first().fill('Child')
   await page.getByRole('button', { name: 'P2', exact: true }).click()
@@ -401,9 +406,9 @@ await scenario('Quick add: blank rows ignored, all-or-nothing, one atomic write,
 
 await scenario('History: restore reattaches, permanent delete asks first', async ({ page, mock }) => {
   mock.seed([
-    { id: U(1), title: 'Parent P', due_date: iso(3) },
-    { id: U(2), title: 'Child C', due_date: iso(2), parent_id: U(1), depth: 1 },
-    { id: U(3), title: 'Solo', due_date: iso(1) },
+    { id: U(1), title: 'Parent P', due_date: iso(0) },
+    { id: U(2), title: 'Child C', due_date: iso(0), parent_id: U(1), depth: 1 },
+    { id: U(3), title: 'Solo', due_date: iso(0) },
   ])
   await boot(page)
   await page.getByRole('button', { name: 'Complete “Child C”' }).first().click()
@@ -494,7 +499,7 @@ await scenario('App icons and manifest are served', async ({ page }) => {
 })
 
 await scenario('Two devices: completing the same task twice records it once', async ({ page, mock, ctx }) => {
-  mock.seed([{ id: U(1), title: 'Weekly review', due_date: iso(1), recurrence_every_n_days: 7 }])
+  mock.seed([{ id: U(1), title: 'Weekly review', due_date: iso(0), recurrence_every_n_days: 7 }])
   await boot(page)
   const laptop = await ctx.newPage()
   await laptop.route('http://mock.supabase.local/**', mock.handler)
@@ -506,10 +511,10 @@ await scenario('Two devices: completing the same task twice records it once', as
   await laptop.getByText('already changed on another device').waitFor()
   if (mock.db.completions.length !== 1 || mock.db.tasks.length !== 1) throw new Error(`history ${mock.db.completions.length}, tasks ${mock.db.tasks.length}`)
   // The laptop refreshed itself: the stale occurrence is gone from its screen.
-  await laptop.waitForFunction((d) => ![...document.querySelectorAll('.task-row')].some((r) => r.textContent.includes(d)), iso(1))
+  await laptop.waitForFunction((d) => ![...document.querySelectorAll('.task-row')].some((r) => r.textContent.includes(d)), iso(0))
   await laptop.getByRole('button', { name: 'Later' }).click()
   await laptop.getByRole('button', { name: 'Monthly' }).click()
-  await laptop.locator('.task-row', { hasText: iso(8) }).first().waitFor()
+  await laptop.locator('.task-row', { hasText: iso(7) }).first().waitFor()
 })
 
 await scenario('Sign out clears the session from the device', async ({ page }) => {
@@ -595,7 +600,7 @@ await scenario('Live sync: a change on another device appears without refreshing
 })
 
 await scenario('Categories: rename, recolor, delete-with-move; history keeps old names', async ({ page, mock }) => {
-  mock.seed([{ id: U(1), title: 'Lab task', due_date: iso(1), category_id: 'cat-1' }, { id: U(2), title: 'Done lab', due_date: iso(1), category_id: 'cat-1' }])
+  mock.seed([{ id: U(1), title: 'Lab task', due_date: iso(0), category_id: 'cat-1' }, { id: U(2), title: 'Done lab', due_date: iso(0), category_id: 'cat-1' }])
   await boot(page)
   await page.getByRole('button', { name: 'Complete “Done lab”' }).first().click()
   await page.getByText('Completed.', { exact: true }).waitFor()
@@ -663,12 +668,12 @@ await scenario('Move a task (with its subtask) under another parent, and back to
 
 await scenario('Recurring subtask past its parent: next occurrence becomes top-level', async ({ page, mock }) => {
   mock.seed([
-    { id: U(1), title: 'Semester', due_date: iso(3) },
-    { id: U(2), title: 'Weekly reading', due_date: iso(1), parent_id: U(1), depth: 1, recurrence_every_n_days: 7 },
+    { id: U(1), title: 'Semester', due_date: iso(2) },
+    { id: U(2), title: 'Weekly reading', due_date: iso(0), parent_id: U(1), depth: 1, recurrence_every_n_days: 7 },
   ])
   await boot(page)
   await page.getByRole('button', { name: 'Complete “Weekly reading”' }).first().click()
-  await page.getByText(`Completed — next due ${iso(8)}, as a top-level task (it's past “Semester”).`).waitFor()
+  await page.getByText(`Completed — next due ${iso(7)}, as a top-level task (it's past “Semester”).`).waitFor()
   const next = mock.db.tasks.find((t) => t.title === 'Weekly reading')
   if (next.parent_id !== null || next.depth !== 0) throw new Error(JSON.stringify(next))
 })
@@ -776,6 +781,55 @@ await scenario('Sign-out erases the device copy', async ({ page, mock }) => {
   await page.waitForTimeout(300)
   if ((await dump()).includes('Private thing')) throw new Error('device copy survived sign-out')
 })
+
+await scenario('Home-screen shortcuts open the right screen; unknown values are ignored', async ({ page }) => {
+  await page.goto(BASE + '?open=quickadd')
+  await page.getByRole('dialog', { name: 'Quick add' }).waitFor()
+  if (page.url().includes('open=')) throw new Error('shortcut param not cleaned')
+  await page.goto(BASE + '?open=new')
+  await page.getByRole('dialog', { name: 'New task' }).waitFor()
+  await page.goto(BASE + '?open=daily')
+  await page.locator('.tab-btn.active', { hasText: 'Daily' }).waitFor()
+  await page.goto(BASE + '?open=javascript:alert(1)')
+  await page.getByText('Due today', { exact: true }).waitFor()
+  if (await dlg(page).count()) throw new Error('unknown shortcut opened something')
+})
+
+await scenario('Install app: real prompt on Android/desktop Chrome', async ({ page }) => {
+  await boot(page)
+  if (await page.getByRole('button', { name: 'Install app' }).count()) throw new Error('shown before the browser offered install')
+  await page.evaluate(() => {
+    const e = new Event('beforeinstallprompt')
+    e.prompt = () => { window.__prompted = true; return Promise.resolve() }
+    e.userChoice = Promise.resolve({ outcome: 'accepted' })
+    window.dispatchEvent(e)
+  })
+  await page.getByRole('button', { name: 'Install app' }).click()
+  await page.waitForFunction(() => window.__prompted === true)
+  await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')))
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].some((b) => b.textContent === 'Install app'))
+})
+
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'
+
+await scenario('Install app on iPhone: shows the Add to Home Screen steps', async ({ page }) => {
+  await boot(page)
+  await page.getByRole('button', { name: 'Install app' }).click()
+  await page.getByRole('dialog', { name: 'Add Horizon to your Home Screen' }).getByText('Add to Home Screen').first().waitFor()
+  await page.getByRole('button', { name: 'Got it' }).click()
+}, { userAgent: IPHONE })
+
+await scenario('Already installed: no Install app link, even if the browser offers it', async ({ page }) => {
+  await boot(page)
+  await page.evaluate(() => {
+    const e = new Event('beforeinstallprompt')
+    e.prompt = () => Promise.resolve()
+    e.userChoice = Promise.resolve({ outcome: 'accepted' })
+    window.dispatchEvent(e)
+  })
+  await page.waitForTimeout(200)
+  if (await page.getByRole('button', { name: 'Install app' }).count()) throw new Error('offered install inside the installed app')
+}, { userAgent: IPHONE, standalone: true })
 
 await browser.close()
 for (const r of results) console.log(r.join('  '))

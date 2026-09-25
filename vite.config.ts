@@ -49,6 +49,23 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#111317',
         background_color: '#111317',
         display: 'standalone',
+        // Stable identity: updates never show up as a second, separate app.
+        // = the start address, which is what already-installed copies are known by.
+        id: process.env.BASE_PATH ?? '/',
+        lang: 'en',
+        dir: 'ltr',
+        categories: ['productivity'],
+        // Long-press the home-screen icon for these.
+        shortcuts: [
+          { name: 'Quick add', short_name: 'Quick add', url: '?open=quickadd', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'New task', short_name: 'New task', url: '?open=new', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+          { name: 'Today', short_name: 'Today', url: '?open=daily', icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }] },
+        ],
+        // Shown in the richer install dialog (sample data, not real tasks).
+        screenshots: [
+          { src: 'screenshots/phone.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Dashboard' },
+          { src: 'screenshots/wide.png', sizes: '1280x800', type: 'image/png', form_factor: 'wide', label: 'Dashboard on a larger screen' },
+        ],
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

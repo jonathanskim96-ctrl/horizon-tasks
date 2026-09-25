@@ -174,6 +174,20 @@ user's rows). Added, in layers:
   test (delete tree + history + category + overwrite → fully restored);
   mutation-verified.
 
+### Installable app (PWA) polish (2026-09-25)
+- viewport-fit=cover (with black-translucent status bar the header would sit
+  under the iPhone clock; safe-area padding now applies).
+- Manifest: stable `id` (= start URL, matches already-installed copies),
+  shortcuts (Quick add / New task / Today via ?open=…, whitelisted),
+  screenshots (sample data) for the richer install dialog, categories/lang.
+- In-app "Install app": real prompt on Chromium (beforeinstallprompt captured
+  at startup), Share → Add to Home Screen steps on iOS, hidden when installed.
+- Touch polish: no overscroll bounce, no text selection/callout on buttons.
+- e2e/pwa.mjs: Chromium installability check with a real profile + every
+  manifest-referenced file; suite covers shortcuts and both install paths.
+- iOS note: a Home Screen app has its own storage, so the first launch needs
+  one Google sign-in inside it.
+
 ### Known gaps
 None from the spec. Possible later polish: category reordering, notifications.
 
