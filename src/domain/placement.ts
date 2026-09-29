@@ -16,6 +16,9 @@ export function inWeekly(t: Task, today: ISODate) {
   return t.dueDate >= start && t.dueDate <= end
 }
 
+/** Dashboard "This week": the week's tasks minus anything already shown under "Today". */
+export const inDashboardWeek = (t: Task, today: ISODate) => inWeekly(t, today) && !inDaily(t, today)
+
 /** Due from today through the next 30 days (forward-looking only). */
 export const inMonthlyList = (t: Task, today: ISODate) =>
   t.dueDate != null && t.dueDate >= today && t.dueDate <= addDays(today, 30)

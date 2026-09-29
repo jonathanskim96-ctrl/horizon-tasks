@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
-import { inDaily, inLater, inMonthlyList, inWeekly, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
+import { inDaily, inDashboardWeek, inLater, inMonthlyList, inWeekly, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
 import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
 import { applyLocal, restoreDetachReason, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
@@ -103,6 +103,11 @@ describe('placement & sorting', () => {
     expect(inDaily(overdueOld, TODAY)).toBe(true)
     expect(inWeekly(overdueOld, TODAY)).toBe(false)
     expect(inWeekly(mk({ id: 'sun', dueDate: '2026-09-20' }), TODAY)).toBe(true)
+    // Dashboard "This week" skips anything already under "Today" (due today or overdue).
+    expect(inDashboardWeek(mk({ id: 'td', dueDate: TODAY }), TODAY)).toBe(false)
+    expect(inDashboardWeek(mk({ id: 'sun', dueDate: '2026-09-20' }), TODAY)).toBe(false)
+    expect(inDashboardWeek(mk({ id: 'sat', dueDate: '2026-09-26' }), TODAY)).toBe(true)
+    expect(inDashboardWeek(mk({ id: 'nxt', dueDate: '2026-09-27' }), TODAY)).toBe(false)
     expect(inMonthlyList(mk({ id: 'a', dueDate: '2026-10-24' }), TODAY)).toBe(true)
     expect(inMonthlyList(mk({ id: 'b', dueDate: '2026-10-25' }), TODAY)).toBe(false)
     expect(inLater(mk({ id: 'l', dueDate: '2026-10-01' }), TODAY)).toBe(true)

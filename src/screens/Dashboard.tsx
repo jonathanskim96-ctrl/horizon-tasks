@@ -1,4 +1,4 @@
-import { inDaily, inForever, inWeekly, isOverdue, sortTasks } from '../domain/placement'
+import { inDaily, inDashboardWeek, inForever, isOverdue, sortTasks } from '../domain/placement'
 import type { ISODate, Snapshot, Task } from '../domain/types'
 import { MonthCalendar } from '../ui/Calendar'
 import { TaskList } from '../ui/TaskRow'
@@ -14,7 +14,7 @@ interface Props {
 
 export function Dashboard({ data, today, onOpen, onComplete, onAddOn, onGoForever }: Props) {
   const daily = sortTasks(data.tasks.filter((t) => inDaily(t, today)), today)
-  const weekly = sortTasks(data.tasks.filter((t) => inWeekly(t, today)), today)
+  const weekly = sortTasks(data.tasks.filter((t) => inDashboardWeek(t, today)), today)
   const overdue = data.tasks.filter((t) => isOverdue(t, today)).length
   const dueToday = data.tasks.filter((t) => t.dueDate === today).length
   const forever = data.tasks.filter((t) => inForever(t) && !t.parentId).length
