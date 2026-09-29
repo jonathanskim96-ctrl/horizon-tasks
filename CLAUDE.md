@@ -1,6 +1,7 @@
 # Horizon Tasks — rules for every Claude session
 
-Read `NOTES.md` first (decisions, schema, process). This file is the standing
+Read `docs/HANDOFF.md` first (current state, decisions, open items), then
+`NOTES.md` only for detail/history. This file is the standing
 **safety checklist**. Apply it to every change, and re-check the whole diff against it
 before every push.
 

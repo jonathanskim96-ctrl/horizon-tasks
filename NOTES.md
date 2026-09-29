@@ -258,3 +258,5 @@ None from the spec. Possible later polish: category reordering, notifications.
 - 2026-09-24 — Session 2c: second verification pass; 5 more fixes, suites extended (20 e2e, 60+ attack checks).
 - 2026-09-24 — Session 3: full feature build; review pass 1 (code) + pass 2 (black-box); 0004.
 - 2026-09-24 — Session 4: recurring-subtask decision, categories, move, realtime, offline editing.
+- 2026-09-28 — Owner applied 0006 (verified: safety_log + 3 triggers, no TRUNCATE, delete caps). All migrations 0001–0006 applied.
+- 2026-09-29 — Added docs/HANDOFF.md as the compact starting point for new sessions.
