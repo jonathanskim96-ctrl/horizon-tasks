@@ -357,6 +357,10 @@ await scenario('Weekly / Monthly / Later tabs place tasks correctly', async ({ p
     { id: U(4), title: 'Next month', due_date: nextMonth },
   ])
   await boot(page)
+  // Dashboard: a task shown under "Today" is not repeated under "This week".
+  await row(page, 'Today task').waitFor()
+  const dashCount = await page.locator('.task-row', { hasText: 'Today task' }).count()
+  if (dashCount !== 1) throw new Error(`today task shown ${dashCount}x on dashboard`)
   await page.getByRole('button', { name: 'Weekly' }).click()
   await row(page, 'Today task').waitFor()
   if (await row(page, 'In 20 days').count()) throw new Error('20 days in weekly')
