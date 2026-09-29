@@ -102,12 +102,19 @@ describe('placement & sorting', () => {
     const overdueOld = mk({ id: 'old', dueDate: '2025-01-01' })
     expect(inDaily(overdueOld, TODAY)).toBe(true)
     expect(inWeekly(overdueOld, TODAY)).toBe(false)
-    expect(inWeekly(mk({ id: 'sun', dueDate: '2026-09-20' }), TODAY)).toBe(true)
-    // Dashboard "This week" skips anything already under "Today" (due today or overdue).
+    // Weekly: rolling today..today+7, not the calendar week.
+    expect(inWeekly(mk({ id: 'sun', dueDate: '2026-09-20' }), TODAY)).toBe(false)
+    expect(inWeekly(mk({ id: 'wtd', dueDate: TODAY }), TODAY)).toBe(true)
+    expect(inWeekly(mk({ id: 'w7', dueDate: '2026-10-01' }), TODAY)).toBe(true)
+    expect(inWeekly(mk({ id: 'w8', dueDate: '2026-10-02' }), TODAY)).toBe(false)
+    // Dashboard "This week": tomorrow through today+7 (rolling), never today/overdue.
     expect(inDashboardWeek(mk({ id: 'td', dueDate: TODAY }), TODAY)).toBe(false)
     expect(inDashboardWeek(mk({ id: 'sun', dueDate: '2026-09-20' }), TODAY)).toBe(false)
-    expect(inDashboardWeek(mk({ id: 'sat', dueDate: '2026-09-26' }), TODAY)).toBe(true)
-    expect(inDashboardWeek(mk({ id: 'nxt', dueDate: '2026-09-27' }), TODAY)).toBe(false)
+    expect(inDashboardWeek(mk({ id: 'tmr', dueDate: '2026-09-25' }), TODAY)).toBe(true)
+    expect(inDashboardWeek(mk({ id: 'nxtsun', dueDate: '2026-09-27' }), TODAY)).toBe(true)
+    expect(inDashboardWeek(mk({ id: 'd7', dueDate: '2026-10-01' }), TODAY)).toBe(true)
+    expect(inDashboardWeek(mk({ id: 'd8', dueDate: '2026-10-02' }), TODAY)).toBe(false)
+    expect(inDashboardWeek(mk({ id: 'nodue', dueDate: null }), TODAY)).toBe(false)
     expect(inMonthlyList(mk({ id: 'a', dueDate: '2026-10-24' }), TODAY)).toBe(true)
     expect(inMonthlyList(mk({ id: 'b', dueDate: '2026-10-25' }), TODAY)).toBe(false)
     expect(inLater(mk({ id: 'l', dueDate: '2026-10-01' }), TODAY)).toBe(true)

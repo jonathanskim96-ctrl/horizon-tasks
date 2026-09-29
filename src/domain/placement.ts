@@ -1,4 +1,4 @@
-import { addDays, diffDays, monthBounds, weekBounds } from './dates'
+import { addDays, diffDays, monthBounds, rollingWeek } from './dates'
 import type { ISODate, Task } from './types'
 
 // Assumption (confirm): ongoing tasks that carry a due date also appear in the
@@ -9,14 +9,15 @@ export const isOverdue = (t: Task, today: ISODate) => t.dueDate != null && t.due
 /** Due today or overdue by any amount — nothing overdue ever disappears from view. */
 export const inDaily = (t: Task, today: ISODate) => t.dueDate != null && t.dueDate <= today
 
-/** Due within the current Sunday–Saturday week. */
+/** Due from today through 7 days from today (rolling, not the calendar week). */
 export function inWeekly(t: Task, today: ISODate) {
   if (!t.dueDate) return false
-  const { start, end } = weekBounds(today)
+  const { start, end } = rollingWeek(today)
   return t.dueDate >= start && t.dueDate <= end
 }
 
-/** Dashboard "This week": the week's tasks minus anything already shown under "Today". */
+/** Dashboard "This week": the Weekly window minus today — today/overdue tasks are
+ *  already under "Today", so they're never repeated here. */
 export const inDashboardWeek = (t: Task, today: ISODate) => inWeekly(t, today) && !inDaily(t, today)
 
 /** Due from today through the next 30 days (forward-looking only). */
