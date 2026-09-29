@@ -100,7 +100,11 @@ export function Main({ email, userId }: { email: string; userId: string }) {
     shortcut === 'quickadd' ? { kind: 'quickAdd' } : shortcut === 'new' ? { kind: 'form' } : null,
   )
   const installer = useInstall()
-  const [toast, setToast] = useState<string | null>(null)
+  // Wrapped in an object so repeating the same message (e.g. two quick-add
+  // saves in a row) still shows it and restarts its timer.
+  const [toastState, setToastState] = useState<{ text: string } | null>(null)
+  const setToast = useCallback((text: string | null) => setToastState(text == null ? null : { text }), [])
+  const toast = toastState?.text ?? null
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   // Checklist items with a save in flight are disabled, so a quick second tap
@@ -128,10 +132,10 @@ export function Main({ email, userId }: { email: string; userId: string }) {
   }, [])
 
   useEffect(() => {
-    if (!toast) return
-    const t = window.setTimeout(() => setToast(null), 2600)
+    if (!toastState) return
+    const t = window.setTimeout(() => setToastState(null), 2600)
     return () => window.clearTimeout(t)
-  }, [toast])
+  }, [toastState])
 
   const find = useCallback((id: string) => data?.tasks.find((t) => t.id === id), [data])
 

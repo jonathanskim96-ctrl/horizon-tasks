@@ -31,6 +31,9 @@ export const addDays = (iso: ISODate, n: number): ISODate => fromUTC(toUTC(iso) 
 /** Whole days from `a` to `b` (positive when b is later). */
 export const diffDays = (a: ISODate, b: ISODate): number => Math.round((toUTC(b) - toUTC(a)) / DAY_MS)
 
+/** Weekly view: a rolling window from today through 7 days from today (not the calendar week). */
+export const rollingWeek = (today: ISODate) => ({ start: today, end: addDays(today, 7) })
+
 /** Sunday–Saturday week containing `iso`. */
 export function weekBounds(iso: ISODate): { start: ISODate; end: ISODate } {
   const dow = new Date(toUTC(iso)).getUTCDay()

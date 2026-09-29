@@ -1,6 +1,6 @@
 // Weekly, Monthly and Later tabs.
 import { useState } from 'react'
-import { addDays, weekBounds } from '../domain/dates'
+import { addDays, rollingWeek } from '../domain/dates'
 import { inLater, inMonthlyList, inWeekly, sortTasks } from '../domain/placement'
 import type { ISODate, Snapshot, Task } from '../domain/types'
 import { MonthCalendar, WeekCalendar } from '../ui/Calendar'
@@ -30,7 +30,7 @@ function ViewToggle({ view, onChange }: { view: 'list' | 'cal'; onChange: (v: 'l
 export function Weekly(props: Props) {
   const [view, setView] = useState<'list' | 'cal'>('list')
   const { data, today, onOpen, onComplete } = props
-  const { start, end } = weekBounds(today)
+  const { start, end } = rollingWeek(today)
   const tasks = sortTasks(data.tasks.filter((t) => inWeekly(t, today)), today)
   return (
     <>

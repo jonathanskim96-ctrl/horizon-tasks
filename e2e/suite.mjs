@@ -355,14 +355,21 @@ await scenario('Weekly / Monthly / Later tabs place tasks correctly', async ({ p
     { id: U(2), title: 'In 20 days', due_date: iso(20) },
     { id: U(3), title: 'Far future', due_date: '2099-01-01' },
     { id: U(4), title: 'Next month', due_date: nextMonth },
+    { id: U(5), title: 'In 7 days', due_date: iso(7) },
+    { id: U(6), title: 'In 8 days', due_date: iso(8) },
   ])
   await boot(page)
-  // Dashboard: a task shown under "Today" is not repeated under "This week".
+  // Dashboard: a task shown under "Today" is not repeated under "This week",
+  // and "This week" is a rolling tomorrow..today+7 window.
   await row(page, 'Today task').waitFor()
   const dashCount = await page.locator('.task-row', { hasText: 'Today task' }).count()
   if (dashCount !== 1) throw new Error(`today task shown ${dashCount}x on dashboard`)
+  await row(page, 'In 7 days').waitFor()
+  if (await row(page, 'In 8 days').count()) throw new Error('8 days on dashboard week')
   await page.getByRole('button', { name: 'Weekly' }).click()
   await row(page, 'Today task').waitFor()
+  await row(page, 'In 7 days').waitFor()
+  if (await row(page, 'In 8 days').count()) throw new Error('8 days in weekly')
   if (await row(page, 'In 20 days').count()) throw new Error('20 days in weekly')
   await page.getByRole('button', { name: 'Calendar' }).click()
   await page.locator('.cal-cell.today').click()

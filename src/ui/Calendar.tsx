@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDays, monthBounds, weekBounds } from '../domain/dates'
+import { addDays, monthBounds, rollingWeek } from '../domain/dates'
 import { dayCounts, sortTasks } from '../domain/placement'
 import type { ISODate, Snapshot, Task } from '../domain/types'
 import { TaskList } from './TaskRow'
@@ -97,8 +97,9 @@ export function MonthCalendar(props: Props) {
   )
 }
 
-/** The current Sunday–Saturday week. */
+/** Today through 7 days from today, with cells under their correct weekday. */
 export function WeekCalendar(props: Props) {
-  const { start, end } = weekBounds(props.today)
-  return <DayGrid key={start} {...props} days={range(start, end)} lead={0} />
+  const { start, end } = rollingWeek(props.today)
+  const lead = new Date(`${start}T00:00:00Z`).getUTCDay()
+  return <DayGrid key={start} {...props} days={range(start, end)} lead={lead} />
 }
