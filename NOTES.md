@@ -225,6 +225,9 @@ None from the spec. Possible later polish: category reordering, notifications.
    (Vite `base` from `BASE_PATH`). Supabase URL + publishable key come from repo
    *variables*, not committed files.
 10. Visual theme: the artifact's dark palette (tokens in `src/index.css`).
+11. **Weekly window (2026-09-29)**: rolling, not the calendar week. Weekly tab
+    (list + calendar) = today through today+7; Dashboard "This week" = that
+    window minus today/overdue, so nothing under "Today" repeats there.
 
 ## UI (session 2)
 
@@ -260,3 +263,6 @@ None from the spec. Possible later polish: category reordering, notifications.
 - 2026-09-24 — Session 4: recurring-subtask decision, categories, move, realtime, offline editing.
 - 2026-09-28 — Owner applied 0006 (verified: safety_log + 3 triggers, no TRUNCATE, delete caps). All migrations 0001–0006 applied.
 - 2026-09-29 — Added docs/HANDOFF.md as the compact starting point for new sessions.
+- 2026-09-29 — Dashboard no longer repeats "Today" tasks under "This week"; Weekly
+  tab + dashboard week switched to a rolling today..today+7 window; repeated
+  identical toasts now restart their timer.

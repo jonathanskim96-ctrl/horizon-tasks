@@ -35,6 +35,8 @@ code only — task data lives only in Supabase and never goes in the repo.
   refused with message; a parent can't move earlier than its subtasks).
 - Recurrence counts from the due date. A recurring subtask whose next
   occurrence would pass its parent becomes top-level.
+- Weekly tab = rolling today..today+7 (not Sun–Sat). Dashboard "This week" =
+  that window minus today/overdue (no repeats of "Today").
 - Forever tasks with a due date also appear in date tabs. Monthly list =
   today..today+30. Restore removes the History entry; completing a parent
   cascades to subtasks (warn first).
