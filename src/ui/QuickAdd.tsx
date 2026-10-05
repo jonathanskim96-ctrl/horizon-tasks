@@ -45,10 +45,6 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
 
   return (
     <Sheet title="Quick add" onClose={onClose}>
-      <p className="muted small">
-        Rows without a title are ignored. Priority and category are optional — tasks without them are tagged “Needs …” so you can add
-        them later. Notes, checklists, repeats and Forever need the full form.
-      </p>
       {error && <ErrorBanner message={error} />}
       {rows.map((row, i) => {
         const err = rowErrors[i]
