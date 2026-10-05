@@ -7,6 +7,10 @@ export const str = (v: unknown, fallback = ''): string => (typeof v === 'string'
 export const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : null)
 export const int = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isInteger(v) ? v : fallback)
 
+/** 1–5, or null when unset/invalid (priority is optional). */
+export const validPriorityOrNull = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5 ? v : null
+
 export function normalizeChecklist(v: unknown): ChecklistItem[] {
   if (!Array.isArray(v)) return []
   return v
@@ -26,8 +30,8 @@ export function normalizeSnapshot(v: unknown): TaskSnapshot {
   return {
     title: str(s.title, '(untitled)'),
     notes: str(s.notes),
-    priority: int(s.priority, 3),
-    categoryId: str(s.categoryId),
+    priority: validPriorityOrNull(s.priority),
+    categoryId: typeof s.categoryId === 'string' && s.categoryId ? s.categoryId : null,
     categoryName: str(s.categoryName, '(unknown category)'),
     categoryColor: str(s.categoryColor, '#8b929c'),
     ongoing: s.ongoing === true,

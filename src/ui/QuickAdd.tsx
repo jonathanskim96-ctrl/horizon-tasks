@@ -9,7 +9,8 @@ const ROWS = 5
 const blank = (): QuickAddRow => ({ title: '', dueDate: '', priority: '', categoryId: '' })
 
 /**
- * Batch entry: title / due / priority / category only. Blank-title rows are
+ * Batch entry: title / due / priority / category only (priority and category
+ * optional). Blank-title rows are
  * skipped; any titled row with a problem blocks the whole batch (by design).
  * On success everything is saved in one atomic write and the form resets.
  */
@@ -44,7 +45,10 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
 
   return (
     <Sheet title="Quick add" onClose={onClose}>
-      <p className="muted small">Rows without a title are ignored. Notes, checklists, repeats and Forever need the full form.</p>
+      <p className="muted small">
+        Rows without a title are ignored. Priority and category are optional — tasks without them are tagged “Needs …” so you can add
+        them later. Notes, checklists, repeats and Forever need the full form.
+      </p>
       {error && <ErrorBanner message={error} />}
       {rows.map((row, i) => {
         const err = rowErrors[i]
@@ -54,15 +58,15 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
             <div className="qa-fields">
               <input type="date" aria-label={`Row ${i + 1} due date`} value={row.dueDate} onChange={(e) => set(i, { dueDate: e.target.value })} />
               <select aria-label={`Row ${i + 1} priority`} value={String(row.priority)} onChange={(e) => set(i, { priority: e.target.value === '' ? '' : Number(e.target.value) })}>
-                <option value="">P–</option>
+                <option value="">No priority</option>
                 {[1, 2, 3, 4, 5].map((p) => (
                   <option key={p} value={p}>
                     P{p}
                   </option>
                 ))}
               </select>
-              <select aria-label={`Row ${i + 1} category`} value={row.categoryId} onChange={(e) => set(i, { categoryId: e.target.value })}>
-                <option value="">Category</option>
+              <select aria-label={`Row ${i + 1} category`} value={row.categoryId ?? ''} onChange={(e) => set(i, { categoryId: e.target.value })}>
+                <option value="">No category</option>
                 {data.categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

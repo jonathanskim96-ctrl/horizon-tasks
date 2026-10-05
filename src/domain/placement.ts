@@ -30,6 +30,12 @@ export const inLater = (t: Task, today: ISODate) =>
 
 export const inForever = (t: Task) => t.ongoing
 
+/** What a task still needs filled in (priority/category are optional), or null. */
+export function missingDetails(t: Pick<Task, 'priority' | 'categoryId'>): string | null {
+  const missing = [t.priority == null && 'priority', t.categoryId == null && 'category'].filter(Boolean)
+  return missing.length ? `Needs ${missing.join(' & ')}` : null
+}
+
 /** Per-day counts for a calendar month grid. */
 export function monthCounts(tasks: Task[], anyDayInMonth: ISODate, today: ISODate) {
   const { start, end } = monthBounds(anyDayInMonth)
@@ -50,6 +56,9 @@ export function dayCounts(tasks: Task[], start: ISODate, end: ISODate, today: IS
 
 // ───────────── sorting ─────────────
 
+/** Unset priority sorts below P1. */
+const prio = (t: Task) => t.priority ?? 0
+
 const byTitle = (a: Task, b: Task) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
 const byDue = (a: Task, b: Task) => {
   if (a.dueDate === b.dueDate) return 0
@@ -58,12 +67,12 @@ const byDue = (a: Task, b: Task) => {
   return diffDays(b.dueDate, a.dueDate) // earlier first
 }
 
-/** Overdue pinned first → priority desc → due date asc → title A–Z. */
+/** Overdue pinned first → priority desc (unset last) → due date asc → title A–Z. */
 export function sortTasks(tasks: Task[], today: ISODate): Task[] {
   return [...tasks].sort(
     (a, b) =>
       Number(isOverdue(b, today)) - Number(isOverdue(a, today)) ||
-      b.priority - a.priority ||
+      prio(b) - prio(a) ||
       byDue(a, b) ||
       byTitle(a, b),
   )
@@ -71,7 +80,7 @@ export function sortTasks(tasks: Task[], today: ISODate): Task[] {
 
 /** Forever tab: priority desc → title A–Z, due date only as tiebreak. */
 export function sortForever(tasks: Task[]): Task[] {
-  return [...tasks].sort((a, b) => b.priority - a.priority || byTitle(a, b) || byDue(a, b))
+  return [...tasks].sort((a, b) => prio(b) - prio(a) || byTitle(a, b) || byDue(a, b))
 }
 
 // ───────────── hierarchy helpers ─────────────

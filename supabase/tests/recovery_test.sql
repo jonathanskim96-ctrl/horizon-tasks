@@ -13,7 +13,10 @@ select public.apply_changes(inserts => jsonb_build_array(
   jsonb_build_object('id','e0000000-0000-0000-0000-000000000001','title','Thesis','notes','years of work','priority',5,
     'category_id',(select id from public.categories where name='Work'),'due_date','2026-12-01'),
   jsonb_build_object('id','e0000000-0000-0000-0000-000000000002','title','Chapter','priority',4,'depth',1,
-    'parent_id','e0000000-0000-0000-0000-000000000001','category_id',(select id from public.categories where name='Work'),'due_date','2026-11-01')));
+    'parent_id','e0000000-0000-0000-0000-000000000001','category_id',(select id from public.categories where name='Work'),'due_date','2026-11-01'),
+  -- No priority/category yet (allowed since 0007): must be recoverable too.
+  jsonb_build_object('id','e0000000-0000-0000-0000-000000000004','title','Blank details','depth',1,
+    'parent_id','e0000000-0000-0000-0000-000000000001','due_date','2026-11-02')));
 select public.apply_changes(completions => '[{"id":"e0000000-0000-0000-0000-0000000000c1","task_id":"e0000000-0000-0000-0000-000000000009","outcome":"completed","snapshot":{"title":"Old win"}}]');
 
 -- A task legitimately completed (moved to History) must NOT be resurrected.
@@ -31,7 +34,7 @@ select public.apply_changes(history_deletes => '["e0000000-0000-0000-0000-000000
 delete from public.categories where name = 'Home';
 do $$ begin
   assert (select count(*) from public.tasks) = 0, 'setup: tasks gone';
-  assert (select count(*) from public.safety_log where table_name = 'tasks' and op = 'DELETE') = 3, 'cascade delete not logged';
+  assert (select count(*) from public.safety_log where table_name = 'tasks' and op = 'DELETE') = 4, 'cascade delete not logged';
   assert (select count(*) from public.safety_log where table_name = 'tasks' and op = 'UPDATE') >= 1, 'edit not logged';
   assert (select count(*) from public.safety_log where table_name = 'completions') = 1, 'history delete not logged';
   assert (select count(*) from public.safety_log where table_name = 'categories') = 1, 'category delete not logged';
@@ -48,9 +51,10 @@ update public.tasks t set notes = l.old_row->>'notes'
         where table_name = 'tasks' and op = 'UPDATE' order by row_id, at asc) l
   where t.id = l.row_id and t.notes = '';
 do $$ begin
-  assert (select count(*) from public.tasks where user_id = '00000000-0000-0000-0000-00000000000e') = 2, 'tasks not recovered (or a completed one was resurrected)';
+  assert (select count(*) from public.tasks where user_id = '00000000-0000-0000-0000-00000000000e') = 3, 'tasks not recovered (or a completed one was resurrected)';
   assert (select count(*) from public.tasks where id = 'e0000000-0000-0000-0000-000000000003') = 0, 'completed task resurrected';
   assert (select parent_id from public.tasks where id = 'e0000000-0000-0000-0000-000000000002') = 'e0000000-0000-0000-0000-000000000001', 'structure not recovered';
+  assert (select category_id is null and priority is null from public.tasks where id = 'e0000000-0000-0000-0000-000000000004'), 'uncategorized task not recovered';
   assert (select notes from public.tasks where id = 'e0000000-0000-0000-0000-000000000001') = 'years of work', 'edit not undone';
   assert (select count(*) from public.completions where id = 'e0000000-0000-0000-0000-0000000000c1') = 1, 'history not recovered';
   assert (select count(*) from public.categories where name = 'Home') = 1, 'category not recovered';

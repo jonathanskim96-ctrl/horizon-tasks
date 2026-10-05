@@ -163,11 +163,23 @@ describe.skipIf(!enabled)('app ↔ database contract', () => {
         { title: 'Q1', dueDate: '2026-11-01', priority: 1, categoryId: cat },
         { title: '', dueDate: '', priority: '', categoryId: '' },
         { title: 'Q2 界', dueDate: '2026-11-02', priority: 5, categoryId: cat },
+        // Priority/category left blank, to fill in later (0007).
+        { title: 'Q3 later', dueDate: '2026-11-03', priority: '', categoryId: '' },
+        { title: 'Q4 later', dueDate: '2026-11-04', priority: '', categoryId: '' },
       ],
       { categories: local.categories, tasks: local.tasks },
     )
     if (!qa.ok) throw new Error('quick add invalid')
     apply(planCreateMany(qa.values, env))
+    expect(local.tasks.find((t) => t.title === 'Q3 later')).toMatchObject({ priority: null, categoryId: null })
+    // Fill one in later; complete the other while still blank.
+    const q4 = local.tasks.find((t) => t.title === 'Q4 later')!
+    const filled = validateTask({ ...q4, priority: 2, categoryId: cat }, { categories: local.categories, tasks: local.tasks, selfId: q4.id })
+    if (!filled.ok) throw new Error('fill-in invalid')
+    apply(planUpdate(q4, filled.value, local.tasks))
+    expect(local.tasks.find((t) => t.id === q4.id)).toMatchObject({ priority: 2, categoryId: cat })
+    apply(planFinish(local.tasks, local.categories, local.tasks.find((t) => t.title === 'Q3 later')!.id, 'completed', env))
+    expect(local.completions.find((c) => c.snapshot.title === 'Q3 later')!.snapshot).toMatchObject({ priority: null, categoryId: null })
     // Complete one, then permanently delete that history entry.
     apply(planFinish(local.tasks, local.categories, local.tasks.find((t) => t.title === 'Q1')!.id, 'completed', env))
     const h = local.completions.find((c) => c.snapshot.title === 'Q1')!

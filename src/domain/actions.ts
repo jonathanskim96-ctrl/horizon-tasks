@@ -16,14 +16,14 @@ export const defaultEnv: Env = {
 }
 
 export function snapshotOf(t: Task, tasks: Task[], categories: Category[]): TaskSnapshot {
-  const cat = categories.find((c) => c.id === t.categoryId)
+  const cat = t.categoryId ? categories.find((c) => c.id === t.categoryId) : undefined
   const parent = t.parentId ? tasks.find((p) => p.id === t.parentId) : undefined
   return {
     title: t.title,
     notes: t.notes,
     priority: t.priority,
     categoryId: t.categoryId,
-    categoryName: cat?.name ?? '(deleted category)',
+    categoryName: cat?.name ?? (t.categoryId ? '(deleted category)' : '(no category)'),
     categoryColor: cat?.color ?? '#888888',
     ongoing: t.ongoing,
     dueDate: t.dueDate,
@@ -156,7 +156,8 @@ export function planRestore(
 ): ChangeSet {
   if (tasks.some((t) => t.id === c.taskId)) throw new Error('This task is already active.')
   const categoryId = categoryOverride ?? c.snapshot.categoryId
-  if (!categories.some((cat) => cat.id === categoryId)) throw new CategoryGoneError(c.snapshot.categoryName)
+  // No category at all is fine (it's optional); a category that was deleted isn't.
+  if (categoryId && !categories.some((cat) => cat.id === categoryId)) throw new CategoryGoneError(c.snapshot.categoryName)
   const s = c.snapshot
   const input = {
     title: s.title, notes: s.notes, priority: s.priority, categoryId, ongoing: s.ongoing,

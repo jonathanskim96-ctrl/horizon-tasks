@@ -32,7 +32,8 @@ begin
         and not exists (select 1 from public.tasks t where t.id = l.row_id)
         and not exists (select 1 from public.completions c where c.task_id = l.row_id)
         and (old_row->>'parent_id' is null or exists (select 1 from public.tasks p where p.id = (old_row->>'parent_id')::uuid))
-        and exists (select 1 from public.categories c where c.id = (old_row->>'category_id')::uuid);
+        and (old_row->>'category_id' is null  -- no category is allowed (0007)
+             or exists (select 1 from public.categories c where c.id = (old_row->>'category_id')::uuid));
     get diagnostics n = row_count;
     n_task := n_task + n;
   end loop;

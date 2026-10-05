@@ -1,6 +1,6 @@
 # Horizon Tasks — handoff (read this first)
 
-Compact current state as of 2026-09-29. Details/history: `NOTES.md`. Rules:
+Compact current state as of 2026-10-05. Details/history: `NOTES.md`. Rules:
 `CLAUDE.md` (data safety + security checklist — always apply).
 
 ## What it is
@@ -24,13 +24,18 @@ code only — task data lives only in Supabase and never goes in the repo.
   (add/rename/recolor/delete-with-move), live sync (Realtime), offline editing
   (IndexedDB cache + ordered outbox), installable PWA (shortcuts, install
   button, iOS steps), auto-updating service worker (build id in footer).
-- Migrations 0001–0006 are **all applied** in the owner's Supabase
-  (0006 verified 2026-09-28). The next migration is `0007_…`.
+- Migrations 0001–0006 are applied in the owner's Supabase (0006 verified
+  2026-09-28). **0007 (optional priority/category) written 2026-10-05 — the
+  owner still has to run it**; until then, saving a task with a blank
+  priority/category is refused by the DB with a visible error. The next
+  migration is `0008_…`.
 - Known gaps: none from the spec.
 
 ## Key decisions (owner-confirmed)
-- Priority: integer 1–5, no default. Category required, no default (starter:
-  MPH, Core Lab, KFAM, Admin, Financial, Other).
+- Priority: integer 1–5 or blank; category optional (starter: MPH, Core Lab,
+  KFAM, Admin, Financial, Other). No defaults. Blank = "fill in later": the task
+  shows a "Needs priority/category" tag, and blank priority sorts below P1
+  (overdue still pinned first). Applies to Quick Add and the full form (0007).
 - Depth: top-level 0, subtasks to depth 4. Subtask due ≤ parent due (save
   refused with message; a parent can't move earlier than its subtasks).
 - Recurrence counts from the due date. A recurring subtask whose next
@@ -40,7 +45,8 @@ code only — task data lives only in Supabase and never goes in the repo.
 - Forever tasks with a due date also appear in date tabs. Monthly list =
   today..today+30. Restore removes the History entry; completing a parent
   cascades to subtasks (warn first).
-- Quick Add: blank rows skipped, any invalid titled row blocks the batch.
+- Quick Add: blank rows skipped, priority/category optional, any invalid
+  titled row (e.g. no due date) blocks the batch.
 - Sign-out: this device only; wipes the offline copy (warns if unsynced).
 
 ## Architecture in one breath

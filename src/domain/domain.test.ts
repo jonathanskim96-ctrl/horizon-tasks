@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
-import { inDaily, inDashboardWeek, inLater, inMonthlyList, inWeekly, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
+import { inDaily, inDashboardWeek, inLater, inMonthlyList, inWeekly, missingDetails, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
 import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
 import { applyLocal, restoreDetachReason, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
@@ -43,10 +43,26 @@ describe('validation', () => {
     if (!r.ok) expect(r.errors.priority).toBeTruthy()
     expect(validateTask({ title: 'x', priority: '3', categoryId: 'c1', dueDate: TODAY }, ctx).ok).toBe(false)
   })
-  it('requires due date unless ongoing, and a category', () => {
+  it('requires due date unless ongoing', () => {
     expect(validateTask({ title: 'x', priority: 3, categoryId: 'c1' }, ctx).ok).toBe(false)
     expect(validateTask({ title: 'x', priority: 3, categoryId: 'c1', ongoing: true }, ctx).ok).toBe(true)
-    expect(validateTask({ title: 'x', priority: 3, categoryId: '', ongoing: true }, ctx).ok).toBe(false)
+  })
+  it('priority and category are optional, but must be valid when given', () => {
+    for (const blank of [null, undefined, '']) {
+      const r = validateTask({ title: 'x', priority: blank, categoryId: blank, dueDate: TODAY }, ctx)
+      expect(r.ok && [r.value.priority, r.value.categoryId]).toEqual([null, null])
+    }
+    const r = validateTask({ title: 'x', priority: 0, categoryId: 'gone', dueDate: TODAY }, ctx)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(['categoryId', 'priority'])
+    for (const bad of [6, -1, 2.5, '2', true, {}, NaN]) expect(validateTask({ title: 'x', priority: bad, categoryId: null, dueDate: TODAY }, ctx).ok).toBe(false)
+    for (const bad of [5, {}, [], true]) expect(validateTask({ title: 'x', priority: null, categoryId: bad, dueDate: TODAY }, ctx).ok).toBe(false)
+  })
+  it('flags tasks that still need details', () => {
+    expect(missingDetails(mk({ id: 'a' }))).toBe(null)
+    expect(missingDetails(mk({ id: 'a', priority: null }))).toBe('Needs priority')
+    expect(missingDetails(mk({ id: 'a', categoryId: null }))).toBe('Needs category')
+    expect(missingDetails(mk({ id: 'a', priority: null, categoryId: null }))).toBe('Needs priority & category')
   })
   it('blocks a subtask due after its parent with a visible message', () => {
     const r = validateTask({ title: 'x', priority: 3, categoryId: 'c1', dueDate: '2026-10-01', parentId: 'p' }, ctx)
@@ -91,9 +107,12 @@ describe('validation', () => {
     const blank = { title: '  ', dueDate: '', priority: '', categoryId: '' }
     const good = validateQuickAdd([row, blank, { ...row, title: 'b' }], ctx)
     expect(good.ok && good.values.map((v) => v.title)).toEqual(['a', 'b'])
-    const bad = validateQuickAdd([row, { ...row, priority: '' }], ctx)
+    const bad = validateQuickAdd([row, { ...row, priority: 9 }], ctx)
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(Object.keys(bad.rowErrors)).toEqual(['1'])
+    // Priority and category may be left blank, to fill in later.
+    const later = validateQuickAdd([row, { ...row, title: 'c', priority: '', categoryId: '' }], ctx)
+    expect(later.ok && later.values.map((v) => [v.title, v.priority, v.categoryId])).toEqual([['a', 2, 'c1'], ['c', null, null]])
   })
 })
 
@@ -130,6 +149,15 @@ describe('placement & sorting', () => {
     ]
     expect(sortTasks(list, TODAY).map((t) => t.id)).toEqual(['late', 'early', 'A', 'B'])
     expect(sortForever(list).map((t) => t.id)).toEqual(['A', 'B', 'early', 'late'])
+  })
+  it('sorts unset priority below P1, but overdue still first', () => {
+    const list = [
+      mk({ id: 'none', priority: null, dueDate: '2026-09-24' }),
+      mk({ id: 'p1', priority: 1, dueDate: '2026-09-30' }),
+      mk({ id: 'lateNone', priority: null, dueDate: '2026-09-20' }),
+    ]
+    expect(sortTasks(list, TODAY).map((t) => t.id)).toEqual(['lateNone', 'p1', 'none'])
+    expect(sortForever(list).map((t) => t.id)).toEqual(['p1', 'lateNone', 'none'])
   })
   it('counts per day for the calendar', () => {
     const c = monthCounts([mk({ id: 'a', dueDate: '2026-09-01' }), mk({ id: 'b', dueDate: '2026-09-30' })], TODAY, TODAY)
@@ -199,6 +227,13 @@ describe('recurrence & actions', () => {
     expect(back.historyDeletes).toEqual([done.id])
     expect(planRestore([], cats, done, env).inserts[0]).toMatchObject({ parentId: null, depth: 0 })
     expect(() => planRestore([], [], done, env)).toThrow(/category/)
+  })
+  it('a task with no priority/category completes and restores as-is', () => {
+    const t = mk({ id: 'n', priority: null, categoryId: null })
+    const done = planFinish([t], cats, 'n', 'completed', env).completions[0]
+    expect(done.snapshot).toMatchObject({ priority: null, categoryId: null, categoryName: '(no category)' })
+    // No category is not a "deleted category": restores even with none defined.
+    expect(planRestore([], [], done, env).inserts[0]).toMatchObject({ id: 'n', priority: null, categoryId: null })
   })
   it('restore never breaks the subtask date rule: detaches with a reason instead', () => {
     const parent = mk({ id: 'p', dueDate: '2026-10-10' })

@@ -23,8 +23,10 @@ export interface Task {
   id: string
   title: string
   notes: string
-  priority: number
-  categoryId: string
+  /** 1–5, or null = not set yet ("needs details"). */
+  priority: number | null
+  /** null = not set yet ("needs details"). */
+  categoryId: string | null
   ongoing: boolean
   dueDate: ISODate | null
   checklist: ChecklistItem[]
@@ -40,8 +42,8 @@ export type Outcome = 'completed' | 'skipped'
 export interface TaskSnapshot {
   title: string
   notes: string
-  priority: number
-  categoryId: string
+  priority: number | null
+  categoryId: string | null
   categoryName: string
   categoryColor: string
   ongoing: boolean

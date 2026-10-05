@@ -127,6 +127,24 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 update public.categories set name = 'pwned', color = '#000000' where id = :'a_cat';
 delete from public.categories where id = :'a_cat';
 
+-- ── Optional priority/category (0007) ─────────────────────────
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
+select public.apply_changes(inserts => '[{"id":"b0000000-0000-0000-0000-0000000000a7","title":"Quick, no details","due_date":"2026-01-01"}]');
+do $$ begin
+  assert (select priority is null and category_id is null from public.tasks where id = 'b0000000-0000-0000-0000-0000000000a7'), 'blank priority/category not stored as empty';
+end $$;
+select pg_temp.must_fail($s$ select public.apply_changes(inserts => '[{"title":"x","priority":7,"due_date":"2026-01-01"}]') $s$, 'priority 7 with no category');
+select pg_temp.must_fail($s$ select public.apply_changes(inserts => '[{"title":"x","priority":2.5,"due_date":"2026-01-01"}]') $s$, 'priority 2.5 with no category');
+select pg_temp.must_fail(format($s$ select public.apply_changes(updates => '[{"id":"b0000000-0000-0000-0000-0000000000a7","title":"x","category_id":"%s","due_date":"2026-01-01"}]') $s$, :'a_cat'), 'B fills in A category later');
+-- Filling them in later works.
+select public.apply_changes(updates => jsonb_build_array(jsonb_build_object('id','b0000000-0000-0000-0000-0000000000a7','title','Quick, no details','priority',2,
+  'category_id',(select id from public.categories where name='B'),'due_date','2026-01-01')));
+do $$ begin
+  assert (select priority = 2 and category_id is not null from public.tasks where id = 'b0000000-0000-0000-0000-0000000000a7'), 'could not fill in details later';
+end $$;
+reset role;
+
 -- ── Guardrails (0006) ───────────────────────────────────────
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';

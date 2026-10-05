@@ -89,11 +89,17 @@ do $$ begin
   assert (select count(*) from public.categories) = 0, 'RLS categories';
   assert (select count(*) from public.completions) = 0, 'RLS completions';
 end $$;
--- B cannot attach a task to A's category
+-- B cannot attach a task to A's category (A's real id, looked up as owner:
+-- B can't see it, and since 0007 a missing category is a legitimate "none").
+reset role;
+select id as a_cat_rls from public.categories where name = 'A' \gset
+set my.a_cat = :'a_cat_rls';
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000b';
 do $$ begin
   begin
     insert into public.tasks (title, priority, category_id, due_date)
-      values ('x', 1, (select id from public.categories limit 1), '2026-01-01');
+      values ('x', 1, current_setting('my.a_cat')::uuid, '2026-01-01');
   exception when others then null;
   end;
 end $$;

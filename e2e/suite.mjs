@@ -179,8 +179,6 @@ await scenario('Parent cannot move earlier than its subtask', async ({ page }) =
   await page.getByRole('button', { name: '+ Add subtask' }).click()
   await dlg(page).locator('input[type=text]').first().fill('Child')
   await page.getByRole('button', { name: 'P2', exact: true }).click()
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.getByText('Category is required.').waitFor() // no category default (spec)
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso(4))
   await page.getByRole('button', { name: 'Save' }).click()
@@ -388,7 +386,7 @@ await scenario('Weekly / Monthly / Later tabs place tasks correctly', async ({ p
   if (await row(page, 'Today task').count()) throw new Error('today in later')
 })
 
-await scenario('Quick add: blank rows ignored, all-or-nothing, one atomic write, resets', async ({ page, mock }) => {
+await scenario('Quick add: blank rows ignored, optional priority/category, all-or-nothing, one atomic write, resets', async ({ page, mock }) => {
   await boot(page)
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Quick add' }).click()
@@ -400,19 +398,41 @@ await scenario('Quick add: blank rows ignored, all-or-nothing, one atomic write,
   }
   await fill(1, 'QA one', iso(1), 2, 'MPH')
   await fill(3, 'QA three <b>x</b>', iso(2), 4, 'Admin')
-  await fill(5, 'QA five', iso(3), null, 'KFAM') // missing priority
+  await fill(4, 'QA four later', iso(2), null, null) // priority + category left for later
+  await fill(5, 'QA five', null, 1, 'KFAM') // missing due date
   await page.getByRole('button', { name: 'Save all' }).click()
   await page.getByText('Nothing was saved').waitFor()
-  await page.locator('.qa-row.has-error').getByText('Priority must be a whole number').waitFor()
+  await page.locator('.qa-row.has-error').getByText('Due date is required').waitFor()
+  if ((await page.locator('.qa-row.has-error').count()) !== 1) throw new Error('blank priority/category flagged as an error')
   if (mock.calls.apply !== 0 || mock.db.tasks.length) throw new Error('partial save')
-  await page.getByLabel('Row 5 priority').selectOption('1')
+  await page.getByLabel('Row 5 due date').fill(iso(3))
   await page.getByRole('button', { name: 'Save all' }).click()
-  await page.getByText('Added 3 tasks.').waitFor()
-  if (mock.calls.apply !== 1 || mock.db.tasks.length !== 3) throw new Error(`calls ${mock.calls.apply}, tasks ${mock.db.tasks.length}`)
+  await page.getByText('Added 4 tasks.').waitFor()
+  if (mock.calls.apply !== 1 || mock.db.tasks.length !== 4) throw new Error(`calls ${mock.calls.apply}, tasks ${mock.db.tasks.length}`)
+  const later = mock.db.tasks.find((t) => t.title === 'QA four later')
+  if (later.priority !== null || later.category_id !== null) throw new Error('blank fields not saved as empty: ' + JSON.stringify(later))
   if (await page.getByLabel('Row 1 title').inputValue()) throw new Error('form not reset')
   await dlg(page).waitFor() // stays open for another burst
   await page.getByRole('button', { name: 'Save all' }).click()
   await page.getByText('Type a title in at least one row.').waitFor()
+  await dlg(page).locator('.btn-row').getByRole('button', { name: 'Close' }).click()
+
+  // The blank task is marked, sorts below P1 on the same day, and can be filled in later.
+  await page.getByRole('button', { name: 'Monthly' }).click()
+  const row = exactRow(page, 'QA four later')
+  await row.locator('.needs-badge', { hasText: 'Needs priority & category' }).waitFor()
+  const order = await page.locator('.task-row .task-title').allTextContents()
+  if (order.indexOf('QA four later') < order.indexOf('QA three <b>x</b>')) throw new Error('unset priority sorted above P4: ' + order)
+  await row.click()
+  await dlg(page).getByText('Needs priority & category — tap Edit to add').waitFor()
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByRole('button', { name: 'P3', exact: true }).click()
+  await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByText('Task updated.').waitFor()
+  const filled = mock.db.tasks.find((t) => t.title === 'QA four later')
+  if (filled.priority !== 3 || !filled.category_id) throw new Error('not filled in: ' + JSON.stringify(filled))
+  if (await page.locator('.needs-badge').count()) throw new Error('badge still shown after filling in')
 })
 
 await scenario('History: restore reattaches, permanent delete asks first', async ({ page, mock }) => {

@@ -10,7 +10,7 @@ fi
 VITE_SUPABASE_URL=http://mock.supabase.local VITE_SUPABASE_ANON_KEY=sb_publishable_test npx vite build >/dev/null
 npx vite preview --port 5198 --strictPort >/dev/null 2>&1 &
 PREVIEW=$!
-trap 'kill $PREVIEW' EXIT
+trap 'kill $PREVIEW 2>/dev/null || true' EXIT # it may already have exited
 sleep 2
 node e2e/suite.mjs
 node e2e/pwa.mjs

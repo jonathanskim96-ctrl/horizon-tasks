@@ -92,6 +92,13 @@ It creates the four tables the app uses and the security rules that keep them pr
    table-wiping commands, caps on mass deletion — see `docs/RECOVERY.md`).
    Same warning → **Run query** → "Success. No rows returned."
 
+13. **And the seventh file** — first make a backup: in the app, open
+   **History → Export JSON** and keep the downloaded file. Then run, the same way:
+   `https://raw.githubusercontent.com/jonathanskim96-ctrl/horizon-tasks/main/supabase/migrations/0007_optional_priority_category.sql`
+   (lets a task be saved without a priority or category, so you can add them
+   later; it only relaxes two rules and changes no existing data). Same warning
+   → **Run query** → "Success. No rows returned."
+
 Each migration file runs **once**, in number order. Future changes will arrive as new files
 (`0002_…`, `0003_…`), and you'll run them the same way.
 

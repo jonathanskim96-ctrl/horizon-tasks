@@ -57,6 +57,7 @@ input, textarea, select { font: inherit; color: var(--text); }
 .task-title { font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
 .badge { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
 .overdue-badge { background: var(--overdue); color: #1a0d05; }
+.needs-badge { border: 1px dashed var(--muted); color: var(--muted); padding: 1px 6px; }
 .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
 .priority-chip { font-size: 10.5px; font-weight: 700; color: var(--muted); }
 .task-meta { display: flex; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }

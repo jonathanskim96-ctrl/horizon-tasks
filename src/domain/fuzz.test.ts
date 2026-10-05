@@ -64,7 +64,7 @@ describe('fuzz: random action sequences keep data consistent', () => {
             const due = parent?.dueDate ? addDays(parent.dueDate, -Math.floor(r() * 5)) : addDays('2026-09-24', Math.floor(r() * 40) - 10)
             const v = validateTask(
               {
-                title: pick(TITLES), priority: 1 + Math.floor(r() * 5), categoryId: pick(cats).id, dueDate: r() < 0.1 ? null : due,
+                title: pick(TITLES), priority: r() < 0.2 ? null : 1 + Math.floor(r() * 5), categoryId: r() < 0.2 ? null : pick(cats).id, dueDate: r() < 0.1 ? null : due,
                 ongoing: r() < 0.15, parentId: parent?.id ?? null, checklist: r() < 0.3 ? [{ text: 'c', done: false }] : [],
                 recurrence: r() < 0.3 ? { everyNDays: 1 + Math.floor(r() * 10), endDate: r() < 0.3 ? addDays(due, 20) : null } : null,
               },
@@ -80,7 +80,7 @@ describe('fuzz: random action sequences keep data consistent', () => {
           } else if (op < 0.36) {
             s = applyLocal(s, planReassignCategory(s.tasks, 'c1', 'c2'))
           } else if (op < 0.4) {
-            const v = validateTask({ ...t, title: pick(TITLES), priority: 1 + Math.floor(r() * 5), dueDate: t.dueDate ? addDays(t.dueDate, Math.floor(r() * 7) - 3) : null }, { categories: s.categories, tasks: s.tasks, selfId: t.id })
+            const v = validateTask({ ...t, title: pick(TITLES), priority: r() < 0.2 ? null : 1 + Math.floor(r() * 5), dueDate: t.dueDate ? addDays(t.dueDate, Math.floor(r() * 7) - 3) : null }, { categories: s.categories, tasks: s.tasks, selfId: t.id })
             if (v.ok) s = applyLocal(s, planUpdate(t, v.value))
           } else if (op < 0.47 && t.checklist.length) {
             s = applyLocal(s, planToggleChecklist(t, 0))

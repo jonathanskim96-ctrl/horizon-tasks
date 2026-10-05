@@ -6,7 +6,7 @@ import { isValidISODate } from './dates'
 import { nextCategoryColor, safeColor } from './categories'
 import type { Env } from './actions'
 import { EXPORT_APP } from './exporting'
-import { normalizeChecklist, normalizeRecurrence } from './normalize'
+import { normalizeChecklist, normalizeRecurrence, validPriorityOrNull } from './normalize'
 import { emptyChangeSet, MAX_DEPTH, type Category, type ChangeSet, type ChecklistItem, type Completion, type Recurrence, type Snapshot, type Task } from './types'
 import { validateCategoryName, validateTask } from './validate'
 
@@ -20,7 +20,7 @@ interface RawTask {
   dueDate: unknown; checklist: unknown; srcParentId: string | null; recurrence: { everyNDays: unknown; endDate?: unknown } | null
 }
 interface RawCompletion {
-  srcTaskId: string | null; srcParentId: string | null; title: string; notes: string; priority: number; categoryName: string
+  srcTaskId: string | null; srcParentId: string | null; title: string; notes: string; priority: number | null; categoryName: string
   dueDate: string | null; completedAt: string; outcome: 'completed' | 'skipped'; parentTitle: string | null
   /** Extra snapshot detail, present in this app's own exports. */
   checklist: ChecklistItem[]; recurrence: Recurrence | null; ongoing: boolean; createdAt: string
@@ -85,7 +85,7 @@ export function parseImport(text: string): ParsedImport {
       srcParentId: strOrNull(o.parentId),
       title: str(s.title).trim() || '(untitled)',
       notes: str(s.notes),
-      priority: typeof s.priority === 'number' && Number.isInteger(s.priority) && s.priority >= 1 && s.priority <= 5 ? s.priority : 3,
+      priority: validPriorityOrNull(s.priority),
       categoryName: ours ? str(s.categoryName) : (catName.get(str(s.categoryId)) ?? ''),
       dueDate: isValidISODate(o.dueDate) ? o.dueDate : null,
       // The artifact stored a date only; keep it as local noon so it sorts sensibly.
@@ -134,7 +134,7 @@ export function planImport(p: ParsedImport, current: Snapshot, env: Env): Import
   const notes: string[] = []
   let skipped = 0
   let duplicates = 0
-  const catId = (name: string) => current.categories.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id ?? ''
+  const catId = (name: string) => current.categories.find((c) => c.name.toLowerCase() === name.toLowerCase())?.id ?? null
   const newId = new Map<string, string>() // src id → new id
   const accepted: Task[] = []
   const ctxTasks = () => [...current.tasks, ...accepted]
@@ -205,7 +205,7 @@ export function planImport(p: ParsedImport, current: Snapshot, env: Env): Import
       completedAt: c.completedAt,
       snapshot: {
         title: c.title.slice(0, 500), notes: c.notes.slice(0, 20000), priority: c.priority,
-        categoryId: cat?.id ?? '', categoryName: cat?.name ?? (c.categoryName || '(unknown category)'), categoryColor: cat?.color ?? '#8b929c',
+        categoryId: cat?.id ?? null, categoryName: cat?.name ?? (c.categoryName || '(no category)'), categoryColor: cat?.color ?? '#8b929c',
         ongoing: c.ongoing, dueDate: c.dueDate, checklist: c.checklist, parentId, parentTitle: c.parentTitle, depth: parentId ? 1 : 0,
         recurrence: c.recurrence, createdAt: c.createdAt || c.completedAt,
       },

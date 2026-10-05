@@ -46,11 +46,19 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
   const notes = input.notes == null ? '' : String(input.notes)
   if (notes.length > LIMITS.notes) errors.notes = `Notes are too long (max ${LIMITS.notes} characters).`
 
-  if (!isValidPriority(input.priority)) errors.priority = 'Priority must be a whole number from 1 to 5.'
+  // Priority and category are optional (blank = "needs details", fill in later),
+  // but anything that *is* given must be valid.
+  let priority: number | null = null
+  if (input.priority != null && input.priority !== '') {
+    if (isValidPriority(input.priority)) priority = input.priority
+    else errors.priority = 'Priority must be a whole number from 1 to 5.'
+  }
 
-  const categoryId = typeof input.categoryId === 'string' ? input.categoryId : ''
-  if (!categoryId) errors.categoryId = 'Category is required.'
-  else if (!ctx.categories.some((c) => c.id === categoryId)) errors.categoryId = 'That category no longer exists.'
+  let categoryId: string | null = null
+  if (input.categoryId != null && input.categoryId !== '') {
+    if (typeof input.categoryId === 'string' && ctx.categories.some((c) => c.id === input.categoryId)) categoryId = input.categoryId
+    else errors.categoryId = 'That category no longer exists.'
+  }
 
   const ongoing = input.ongoing === true
   let dueDate: ISODate | null = null
@@ -116,7 +124,7 @@ export function validateTask(input: TaskInput, ctx: ValidationContext): Validati
   if (Object.keys(errors).length) return { ok: false, errors }
   return {
     ok: true,
-    value: { title, notes, priority: input.priority as number, categoryId, ongoing, dueDate, checklist, parentId, depth, recurrence },
+    value: { title, notes, priority, categoryId, ongoing, dueDate, checklist, parentId, depth, recurrence },
   }
 }
 
@@ -135,7 +143,7 @@ export interface QuickAddRow {
   title: string
   dueDate: string
   priority: unknown
-  categoryId: string
+  categoryId: string | null
 }
 
 export type QuickAddResult =
@@ -143,8 +151,9 @@ export type QuickAddResult =
   | { ok: false; rowErrors: Record<number, FieldErrors> }
 
 /**
- * Rows with an empty title are skipped silently. Any titled row with a
- * missing/invalid field blocks the whole batch (all-or-nothing by design).
+ * Rows with an empty title are skipped silently. Priority and category may be
+ * left blank. Any titled row with an invalid field blocks the whole batch
+ * (all-or-nothing by design).
  */
 export function validateQuickAdd(rows: QuickAddRow[], ctx: ValidationContext): QuickAddResult {
   const values: Omit<Task, 'id' | 'createdAt'>[] = []

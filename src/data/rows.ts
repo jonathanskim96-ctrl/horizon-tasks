@@ -2,7 +2,7 @@
 // Anything read from the database is normalized defensively, so a malformed
 // row can never crash rendering or inject non-text into the UI.
 import type { ChangeSet, ChecklistItem, Completion, Outcome, Task, TaskSnapshot } from '../domain/types'
-import { normalizeChecklist, normalizeSnapshot, str } from '../domain/normalize'
+import { normalizeChecklist, normalizeSnapshot, str, validPriorityOrNull } from '../domain/normalize'
 
 export { normalizeChecklist, normalizeSnapshot }
 
@@ -10,8 +10,8 @@ export interface TaskRow {
   id: string
   title: string
   notes: string
-  priority: number
-  category_id: string
+  priority: number | null
+  category_id: string | null
   ongoing: boolean
   due_date: string | null
   checklist: ChecklistItem[]
@@ -36,8 +36,8 @@ export const taskFromRow = (r: TaskRow): Task => ({
   id: r.id,
   title: str(r.title),
   notes: str(r.notes),
-  priority: r.priority,
-  categoryId: r.category_id,
+  priority: validPriorityOrNull(r.priority),
+  categoryId: typeof r.category_id === 'string' && r.category_id ? r.category_id : null,
   ongoing: r.ongoing === true,
   dueDate: r.due_date,
   checklist: normalizeChecklist(r.checklist),

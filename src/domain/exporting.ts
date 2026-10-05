@@ -24,7 +24,7 @@ export function csvCell(v: unknown): string {
 }
 
 export function toCSV(s: Snapshot): string {
-  const cat = (id: string) => s.categories.find((c) => c.id === id)?.name ?? ''
+  const cat = (id: string | null) => s.categories.find((c) => c.id === id)?.name ?? ''
   const title = (id: string | null) => (id ? (s.tasks.find((t) => t.id === id)?.title ?? '') : '')
   const rows: unknown[][] = [
     ['status', 'title', 'category', 'priority', 'forever', 'due_date', 'parent', 'repeats_every_days', 'repeat_until', 'notes', 'checklist', 'outcome', 'completed_at'],

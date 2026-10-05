@@ -1,5 +1,5 @@
 import { safeColor } from '../domain/categories'
-import { breadcrumb, childrenOf, isOverdue, sortTasks } from '../domain/placement'
+import { breadcrumb, childrenOf, isOverdue, missingDetails, sortTasks } from '../domain/placement'
 import { subtaskProgress } from '../domain/actions'
 import { MAX_DEPTH, type ISODate, type Snapshot, type Task } from '../domain/types'
 import { Sheet } from './Sheet'
@@ -24,17 +24,21 @@ export function TaskDetail(p: Props) {
   const { task: t, data, today } = p
   const cat = data.categories.find((c) => c.id === t.categoryId)
   const crumbs = breadcrumb(data.tasks, t)
+  const needs = missingDetails(t)
   const kids = sortTasks(childrenOf(data.tasks, t.id), today)
   const progress = subtaskProgress(data.tasks, data.completions, t.id)
   return (
     <Sheet title={t.title} onClose={p.onClose}>
       {crumbs.length > 0 && <p className="muted small">↳ {crumbs.join(' › ')}</p>}
       <div className="detail-meta">
-        <span className="chip">
-          <span className="cat-dot" style={{ background: safeColor(cat?.color) }} />
-          {cat?.name ?? 'No category'}
-        </span>
-        <span className="chip">P{t.priority}</span>
+        {cat && (
+          <span className="chip">
+            <span className="cat-dot" style={{ background: safeColor(cat.color) }} />
+            {cat.name}
+          </span>
+        )}
+        {t.priority != null && <span className="chip">P{t.priority}</span>}
+        {needs && <span className="chip needs-badge">{needs} — tap Edit to add</span>}
         {t.dueDate && <span className={`chip${isOverdue(t, today) ? ' overdue-chip' : ''}`}>Due {t.dueDate}</span>}
         {t.ongoing && <span className="chip">Forever</span>}
         {t.recurrence && (

@@ -67,6 +67,19 @@ describe('export', () => {
     expect(plan.changeSet.completions[0].snapshot).toMatchObject({ title: 'B', categoryName: 'Admin', ongoing: true })
     expect(t.createdAt).toBe(s.tasks[0].createdAt) // original creation time kept
   })
+  it('round-trips tasks with no priority/category (export, CSV, re-import)', () => {
+    let s: Snapshot = empty
+    s = applyLocal(s, planCreateMany([
+      { title: 'Later', notes: '', priority: null, categoryId: null, ongoing: false, dueDate: '2026-10-01', checklist: [], parentId: null, depth: 0, recurrence: null },
+      { title: 'Done blank', notes: '', priority: null, categoryId: null, ongoing: false, dueDate: '2026-10-02', checklist: [], parentId: null, depth: 0, recurrence: null },
+    ], env))
+    s = applyLocal(s, planFinish(s.tasks, s.categories, s.tasks[1].id, 'completed', env))
+    expect(toCSV(s).split('\r\n')[1]).toBe('active,Later,,,false,2026-10-01,,,,,,,')
+    const plan = planImport(parseImport(toExportJSON(s, env.now())), empty, env)
+    expect(plan.counts).toMatchObject({ tasks: 1, completions: 1, skipped: 0 })
+    expect(plan.changeSet.inserts[0]).toMatchObject({ title: 'Later', priority: null, categoryId: null })
+    expect(plan.changeSet.completions[0].snapshot).toMatchObject({ title: 'Done blank', priority: null, categoryId: null })
+  })
   it('round-trips history snapshot details (checklist, recurrence) from our own export', () => {
     let s: Snapshot = empty
     s = applyLocal(s, planCreateMany([{ title: 'R', notes: '', priority: 1, categoryId: 'c-mph', ongoing: false, dueDate: '2026-10-01', checklist: [{ text: 'a', done: true }], parentId: null, depth: 0, recurrence: { everyNDays: 3, endDate: '2026-12-01' } }], env))

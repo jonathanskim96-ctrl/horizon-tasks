@@ -20,7 +20,8 @@ data, forms, handlers, render or storage.
 ## Schema v1 (0001_init.sql)
 
 - `categories(id, user_id, name, color #rrggbb, sort_order, created_at)`
-- `tasks` — active tasks only. `priority smallint 1–5`, `due_date date`
+- `tasks` — active tasks only. `priority smallint 1–5` (nullable since 0007;
+  `category_id` too — blank = "fill in later"), `due_date date`
   (required unless `ongoing`), `checklist jsonb[]`, `parent_id` (FK, on delete
   cascade), `depth 0–4`, `recurrence_every_n_days`, `recurrence_end_date`.
 - `completions` — History: `task_id`, `parent_id`, `outcome completed|skipped`,
@@ -33,6 +34,8 @@ data, forms, handlers, render or storage.
 
 ## Security (see CLAUDE.md for the standing checklist)
 
+- 0007_optional_priority_category: priority/category may be null; the
+  ownership trigger only checks a category when one is set.
 - 0006_guardrails: least privilege, safety_log, mass-delete caps.
 - 0005_realtime: tasks/categories/completions in the realtime publication.
 - 0004_stale_write_guard: apply_changes rejects stale deletes/updates atomically.
@@ -193,7 +196,8 @@ None from the spec. Possible later polish: category reordering, notifications.
 
 ## Design discipline (each was a real bug before)
 
-- Integer-only priority, checked in `validateTask` *and* in the DB.
+- Integer-only priority, checked in `validateTask` *and* in the DB. Blank
+  (null) is allowed; anything given must be 1–5.
 - Never render user text as HTML: no `dangerouslySetInnerHTML` (lint: `react/no-danger`).
 - One write guard only (`guardedWrite`). Same key while in flight → same
   promise; different key → visible `BusyError`.
@@ -266,3 +270,7 @@ None from the spec. Possible later polish: category reordering, notifications.
 - 2026-09-29 — Dashboard no longer repeats "Today" tasks under "This week"; Weekly
   tab + dashboard week switched to a rolling today..today+7 window; repeated
   identical toasts now restart their timer.
+- 2026-10-05 — Priority and category are now optional everywhere (Quick Add
+  and full form; owner-approved). Blank tasks show a "Needs priority/category"
+  tag, sort below P1 (overdue still first). Migration 0007 (owner approved;
+  relaxes two NOT NULLs). Recovery script now also restores uncategorized tasks.
