@@ -274,3 +274,4 @@ None from the spec. Possible later polish: category reordering, notifications.
   and full form; owner-approved). Blank tasks show a "Needs priority/category"
   tag, sort below P1 (overdue still first). Migration 0007 (owner approved;
   relaxes two NOT NULLs). Recovery script now also restores uncategorized tasks.
+- 2026-10-05 — Owner applied 0007 (Success). All migrations 0001–0007 applied; deployed.

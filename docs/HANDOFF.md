@@ -24,11 +24,9 @@ code only — task data lives only in Supabase and never goes in the repo.
   (add/rename/recolor/delete-with-move), live sync (Realtime), offline editing
   (IndexedDB cache + ordered outbox), installable PWA (shortcuts, install
   button, iOS steps), auto-updating service worker (build id in footer).
-- Migrations 0001–0006 are applied in the owner's Supabase (0006 verified
-  2026-09-28). **0007 (optional priority/category) written 2026-10-05 — the
-  owner still has to run it**; until then, saving a task with a blank
-  priority/category is refused by the DB with a visible error. The next
-  migration is `0008_…`.
+- Migrations 0001–0007 are **all applied** in the owner's Supabase (0007,
+  optional priority/category, run 2026-10-05: "Success"). The next migration
+  is `0008_…`.
 - Known gaps: none from the spec.
 
 ## Key decisions (owner-confirmed)
