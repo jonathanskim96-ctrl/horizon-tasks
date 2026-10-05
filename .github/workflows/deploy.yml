@@ -10,7 +10,8 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  # Per branch: a push to another branch must never cancel a main deploy.
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   # Guardrail: nothing is published unless the safety checks pass first.
