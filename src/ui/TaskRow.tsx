@@ -45,7 +45,6 @@ export function TaskRow({ task: t, data, today, onOpen, onComplete }: Props) {
           <span className="task-title">{t.title}</span>
           {overdue && <span className="badge overdue-badge">Overdue</span>}
           {needs && <span className="badge needs-badge">{needs}</span>}
-          {t.priority != null && <span className="priority-chip">P{t.priority}</span>}
         </div>
         <div className="task-meta">
           {crumbs.length > 0 && <span className="breadcrumb">↳ {crumbs.join(' › ')}</span>}

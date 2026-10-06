@@ -37,7 +37,6 @@ export function TaskDetail(p: Props) {
             {cat.name}
           </span>
         )}
-        {t.priority != null && <span className="chip">P{t.priority}</span>}
         {needs && <span className="chip needs-badge">{needs} — tap Edit to add</span>}
         {t.dueDate && <span className={`chip${isOverdue(t, today) ? ' overdue-chip' : ''}`}>Due {t.dueDate}</span>}
         {t.ongoing && <span className="chip">Forever</span>}

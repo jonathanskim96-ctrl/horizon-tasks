@@ -60,9 +60,10 @@ describe('validation', () => {
   })
   it('flags tasks that still need details', () => {
     expect(missingDetails(mk({ id: 'a' }))).toBe(null)
-    expect(missingDetails(mk({ id: 'a', priority: null }))).toBe('Needs priority')
+    // Priority is no longer used, so a blank priority never asks for details.
+    expect(missingDetails(mk({ id: 'a', priority: null }))).toBe(null)
     expect(missingDetails(mk({ id: 'a', categoryId: null }))).toBe('Needs category')
-    expect(missingDetails(mk({ id: 'a', priority: null, categoryId: null }))).toBe('Needs priority & category')
+    expect(missingDetails(mk({ id: 'a', priority: null, categoryId: null }))).toBe('Needs category')
   })
   it('blocks a subtask due after its parent with a visible message', () => {
     const r = validateTask({ title: 'x', priority: 3, categoryId: 'c1', dueDate: '2026-10-01', parentId: 'p' }, ctx)
@@ -103,16 +104,16 @@ describe('validation', () => {
     expect(validateTask({ ...base, title: 'x', checklist: items }, ctx).ok).toBe(false)
   })
   it('quick add: skips blank rows, all-or-nothing on invalid rows', () => {
-    const row = { title: 'a', dueDate: TODAY, priority: 2, categoryId: 'c1' }
-    const blank = { title: '  ', dueDate: '', priority: '', categoryId: '' }
+    const row = { title: 'a', dueDate: TODAY, categoryId: 'c1' }
+    const blank = { title: '  ', dueDate: '', categoryId: '' }
     const good = validateQuickAdd([row, blank, { ...row, title: 'b' }], ctx)
     expect(good.ok && good.values.map((v) => v.title)).toEqual(['a', 'b'])
-    const bad = validateQuickAdd([row, { ...row, priority: 9 }], ctx)
+    const bad = validateQuickAdd([row, { ...row, dueDate: '' }], ctx)
     expect(bad.ok).toBe(false)
     if (!bad.ok) expect(Object.keys(bad.rowErrors)).toEqual(['1'])
-    // Priority and category may be left blank, to fill in later.
-    const later = validateQuickAdd([row, { ...row, title: 'c', priority: '', categoryId: '' }], ctx)
-    expect(later.ok && later.values.map((v) => [v.title, v.priority, v.categoryId])).toEqual([['a', 2, 'c1'], ['c', null, null]])
+    // Category may be left blank, to fill in later; priority is never set.
+    const later = validateQuickAdd([row, { ...row, title: 'c', categoryId: '' }], ctx)
+    expect(later.ok && later.values.map((v) => [v.title, v.priority, v.categoryId])).toEqual([['a', null, 'c1'], ['c', null, null]])
   })
 })
 
@@ -140,7 +141,7 @@ describe('placement & sorting', () => {
     expect(inLater(mk({ id: 'l2', dueDate: '2026-09-30' }), TODAY)).toBe(false)
     expect(inLater(mk({ id: 'l3', dueDate: '2026-12-01', ongoing: true }), TODAY)).toBe(false)
   })
-  it('sorts overdue first, then priority desc, due asc, title', () => {
+  it('sorts overdue first, then due asc, title (priority ignored)', () => {
     const list = [
       mk({ id: 'B', priority: 5, dueDate: '2026-09-25' }),
       mk({ id: 'A', priority: 5, dueDate: '2026-09-25' }),
@@ -150,14 +151,14 @@ describe('placement & sorting', () => {
     expect(sortTasks(list, TODAY).map((t) => t.id)).toEqual(['late', 'early', 'A', 'B'])
     expect(sortForever(list).map((t) => t.id)).toEqual(['A', 'B', 'early', 'late'])
   })
-  it('sorts unset priority below P1, but overdue still first', () => {
+  it('ignores leftover priorities when sorting', () => {
     const list = [
-      mk({ id: 'none', priority: null, dueDate: '2026-09-24' }),
-      mk({ id: 'p1', priority: 1, dueDate: '2026-09-30' }),
+      mk({ id: 'p5', priority: 5, dueDate: '2026-09-30' }),
+      mk({ id: 'none', priority: null, dueDate: '2026-09-25' }),
       mk({ id: 'lateNone', priority: null, dueDate: '2026-09-20' }),
     ]
-    expect(sortTasks(list, TODAY).map((t) => t.id)).toEqual(['lateNone', 'p1', 'none'])
-    expect(sortForever(list).map((t) => t.id)).toEqual(['p1', 'lateNone', 'none'])
+    expect(sortTasks(list, TODAY).map((t) => t.id)).toEqual(['lateNone', 'none', 'p5'])
+    expect(sortForever(list).map((t) => t.id)).toEqual(['lateNone', 'none', 'p5'])
   })
   it('counts per day for the calendar', () => {
     const c = monthCounts([mk({ id: 'a', dueDate: '2026-09-01' }), mk({ id: 'b', dueDate: '2026-09-30' })], TODAY, TODAY)

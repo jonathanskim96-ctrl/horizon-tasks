@@ -52,7 +52,6 @@ export function OverduePopup({ data, today, error, onFinish, onClose }: Props) {
             <div className="task-top">
               <span className="cat-dot" style={{ background: safeColor(cat?.color) }} />
               <span className="task-title">{t.title}</span>
-              {t.priority != null && <span className="priority-chip">P{t.priority}</span>}
             </div>
             <div className="popup-meta">
               {crumbs.length > 0 && <span className="breadcrumb">↳ {crumbs.join(' › ')} · </span>}

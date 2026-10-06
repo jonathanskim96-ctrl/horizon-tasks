@@ -142,7 +142,6 @@ function isSelfOrDescendant(tasks: Task[], selfId: string, candidateId: string):
 export interface QuickAddRow {
   title: string
   dueDate: string
-  priority: unknown
   categoryId: string | null
 }
 
@@ -151,8 +150,8 @@ export type QuickAddResult =
   | { ok: false; rowErrors: Record<number, FieldErrors> }
 
 /**
- * Rows with an empty title are skipped silently. Priority and category may be
- * left blank. Any titled row with an invalid field blocks the whole batch
+ * Rows with an empty title are skipped silently. Category may be left blank
+ * (priority is no longer entered). Any titled row with an invalid field blocks the whole batch
  * (all-or-nothing by design).
  */
 export function validateQuickAdd(rows: QuickAddRow[], ctx: ValidationContext): QuickAddResult {
@@ -160,7 +159,7 @@ export function validateQuickAdd(rows: QuickAddRow[], ctx: ValidationContext): Q
   const rowErrors: Record<number, FieldErrors> = {}
   rows.forEach((row, i) => {
     if (!row.title.trim()) return
-    const r = validateTask({ title: row.title, priority: row.priority, categoryId: row.categoryId, dueDate: row.dueDate }, ctx)
+    const r = validateTask({ title: row.title, priority: null, categoryId: row.categoryId, dueDate: row.dueDate }, ctx)
     if (r.ok) values.push(r.value)
     else rowErrors[i] = r.errors
   })

@@ -28,7 +28,8 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
   const moved = !!editing && (editing.parentId ?? '') !== parentSel
   const [title, setTitle] = useState(editing?.title ?? '')
   const [notes, setNotes] = useState(editing?.notes ?? '')
-  const [priority, setPriority] = useState<number | null>(editing?.priority ?? null)
+  // Priority is no longer set in the app; an existing task keeps whatever it had.
+  const priority = editing?.priority ?? null
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? '')
   const [ongoing, setOngoing] = useState(editing?.ongoing ?? false)
   const [dueDate, setDueDate] = useState(editing?.dueDate ?? presetDue ?? '')
@@ -104,19 +105,6 @@ export function TaskForm({ data, store, editing, parentId, presetDue, onClose, o
 
       <Field label="Title" error={errors.title}>
         <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={500} autoFocus />
-      </Field>
-
-      <Field label="Priority (optional)" error={errors.priority}>
-        <div className="pill-row">
-          <button type="button" className={`pill${priority == null ? ' active' : ''}`} onClick={() => setPriority(null)}>
-            None
-          </button>
-          {[1, 2, 3, 4, 5].map((p) => (
-            <button key={p} type="button" className={`pill${priority === p ? ' active' : ''}`} onClick={() => setPriority(p)}>
-              P{p}
-            </button>
-          ))}
-        </div>
       </Field>
 
       <Field label="Category (optional)" error={errors.categoryId}>
