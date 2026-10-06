@@ -40,10 +40,9 @@ async function openForm(page) {
   await page.getByRole('menuitem', { name: 'Add task' }).click()
 }
 async function boot(page) { await page.goto(BASE); await page.getByText('Due today', { exact: true }).waitFor() }
-async function newTask(page, { title, p = 'P3', cat = 'Admin', due = iso(), forever = false, repeat, end, check, notes }) {
+async function newTask(page, { title, cat = 'Admin', due = iso(), forever = false, repeat, end, check, notes }) {
   await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill(title)
-  await page.getByRole('button', { name: p, exact: true }).click()
   await dlg(page).getByRole('button', { name: cat, exact: true }).click()
   if (forever) await page.getByText('Forever / ongoing').click()
   if (due) await dlg(page).locator('input[type=date]').first().fill(due)
@@ -67,7 +66,6 @@ await scenario('XSS payloads render as inert text everywhere', async ({ page }) 
   await page.getByPlaceholder('Category name').fill('<img src=x onerror="window.__xss=4">')
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await dlg(page).locator('input[type=text]').first().fill('<img src=x onerror="window.__xss=1">')
-  await page.getByRole('button', { name: 'P3', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso())
   await dlg(page).locator('textarea').fill('<script>window.__xss=2</script>\n<a href="javascript:window.__xss=5">x</a>')
   await page.getByRole('button', { name: '+ Add item' }).click()
@@ -101,7 +99,6 @@ await scenario('Double-tap Save creates exactly one task', async ({ page, mock }
   await boot(page)
   await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill('Only once')
-  await page.getByRole('button', { name: 'P2', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso())
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent === 'Save'); b.click(); b.click(); b.click() })
@@ -163,11 +160,11 @@ await scenario('Edit task + checklist toggle persist', async ({ page, mock }) =>
   if (!mock.db.tasks[0].checklist[0].done) throw new Error('checklist toggle not saved')
   await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await dlg(page).locator('input[type=text]').first().fill('Edited title')
-  await page.getByRole('button', { name: 'P5', exact: true }).click()
+  if (await dlg(page).getByText('Priority').count()) throw new Error('priority field still shown')
   await page.getByRole('button', { name: 'Save' }).click()
   await page.getByText('Task updated.').waitFor()
   const t = mock.db.tasks[0]
-  if (t.title !== 'Edited title' || t.priority !== 5 || !t.checklist[0].done) throw new Error(JSON.stringify(t))
+  if (t.title !== 'Edited title' || t.priority !== null || !t.checklist[0].done) throw new Error(JSON.stringify(t))
 })
 
 await scenario('Parent cannot move earlier than its subtask', async ({ page }) => {
@@ -178,7 +175,6 @@ await scenario('Parent cannot move earlier than its subtask', async ({ page }) =
   await exactRow(page, 'Parent').click()
   await page.getByRole('button', { name: '+ Add subtask' }).click()
   await dlg(page).locator('input[type=text]').first().fill('Child')
-  await page.getByRole('button', { name: 'P2', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso(4))
   await page.getByRole('button', { name: 'Save' }).click()
@@ -206,7 +202,6 @@ await scenario('Max nesting depth hides Add subtask at level 4', async ({ page }
   for (let i = 1; i <= 4; i++) {
     await page.getByRole('button', { name: '+ Add subtask' }).click()
     await dlg(page).locator('input[type=text]').first().fill(`L${i}`)
-    await page.getByRole('button', { name: 'P1', exact: true }).click()
     await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
     await page.getByRole('button', { name: 'Save' }).click()
     await page.getByText('Subtask added.').waitFor()
@@ -231,7 +226,6 @@ await scenario('Escape closes sheets; invalid recurrence rejected', async ({ pag
   await boot(page)
   await openForm(page)
   await dlg(page).locator('input[type=text]').first().fill('R')
-  await page.getByRole('button', { name: 'P1', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso())
   await page.getByText('Repeats').click()
@@ -249,7 +243,6 @@ await scenario('Delete asks first and cascades', async ({ page, mock }) => {
   await row(page, 'Doomed').click()
   await page.getByRole('button', { name: '+ Add subtask' }).click()
   await dlg(page).locator('input[type=text]').first().fill('Doomed child')
-  await page.getByRole('button', { name: 'P1', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await dlg(page).locator('input[type=date]').first().fill(iso())
   await page.getByRole('button', { name: 'Save' }).click()
@@ -386,24 +379,24 @@ await scenario('Weekly / Monthly / Later tabs place tasks correctly', async ({ p
   if (await row(page, 'Today task').count()) throw new Error('today in later')
 })
 
-await scenario('Quick add: blank rows ignored, optional priority/category, all-or-nothing, one atomic write, resets', async ({ page, mock }) => {
+await scenario('Quick add: blank rows ignored, no priority, optional category, all-or-nothing, one atomic write, resets', async ({ page, mock }) => {
   await boot(page)
   await page.getByRole('button', { name: 'Add task', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Quick add' }).click()
-  const fill = async (i, title, due, p, cat) => {
+  if (await page.getByLabel('Row 1 priority').count()) throw new Error('priority picker still shown')
+  const fill = async (i, title, due, cat) => {
     await page.getByLabel(`Row ${i} title`).fill(title)
     if (due) await page.getByLabel(`Row ${i} due date`).fill(due)
-    if (p) await page.getByLabel(`Row ${i} priority`).selectOption(String(p))
     if (cat) await page.getByLabel(`Row ${i} category`).selectOption({ label: cat })
   }
-  await fill(1, 'QA one', iso(1), 2, 'MPH')
-  await fill(3, 'QA three <b>x</b>', iso(2), 4, 'Admin')
-  await fill(4, 'QA four later', iso(2), null, null) // priority + category left for later
-  await fill(5, 'QA five', null, 1, 'KFAM') // missing due date
+  await fill(1, 'QA one', iso(1), 'MPH')
+  await fill(3, 'QA three <b>x</b>', iso(2), 'Admin')
+  await fill(4, 'QA four later', iso(2), null) // category left for later
+  await fill(5, 'QA five', null, 'KFAM') // missing due date
   await page.getByRole('button', { name: 'Save all' }).click()
   await page.getByText('Nothing was saved').waitFor()
   await page.locator('.qa-row.has-error').getByText('Due date is required').waitFor()
-  if ((await page.locator('.qa-row.has-error').count()) !== 1) throw new Error('blank priority/category flagged as an error')
+  if ((await page.locator('.qa-row.has-error').count()) !== 1) throw new Error('blank category flagged as an error')
   if (mock.calls.apply !== 0 || mock.db.tasks.length) throw new Error('partial save')
   await page.getByLabel('Row 5 due date').fill(iso(3))
   await page.getByRole('button', { name: 'Save all' }).click()
@@ -417,21 +410,21 @@ await scenario('Quick add: blank rows ignored, optional priority/category, all-o
   await page.getByText('Type a title in at least one row.').waitFor()
   await dlg(page).locator('.btn-row').getByRole('button', { name: 'Close' }).click()
 
-  // The blank task is marked, sorts below P1 on the same day, and can be filled in later.
+  // The blank task is marked, sorts by due date then title, and can be filled in later.
   await page.getByRole('button', { name: 'Monthly' }).click()
   const row = exactRow(page, 'QA four later')
-  await row.locator('.needs-badge', { hasText: 'Needs priority & category' }).waitFor()
+  await row.locator('.needs-badge', { hasText: 'Needs category' }).waitFor()
+  if (await page.getByText(/Needs priority/).count()) throw new Error('still asks for priority')
   const order = await page.locator('.task-row .task-title').allTextContents()
-  if (order.indexOf('QA four later') < order.indexOf('QA three <b>x</b>')) throw new Error('unset priority sorted above P4: ' + order)
+  if (order.indexOf('QA four later') > order.indexOf('QA three <b>x</b>')) throw new Error('not sorted by title on the same day: ' + order)
   await row.click()
-  await dlg(page).getByText('Needs priority & category — tap Edit to add').waitFor()
+  await dlg(page).getByText('Needs category — tap Edit to add').waitFor()
   await page.getByRole('button', { name: 'Edit' }).click()
-  await page.getByRole('button', { name: 'P3', exact: true }).click()
   await dlg(page).getByRole('button', { name: 'Admin', exact: true }).click()
   await page.getByRole('button', { name: 'Save' }).click()
   await page.getByText('Task updated.').waitFor()
   const filled = mock.db.tasks.find((t) => t.title === 'QA four later')
-  if (filled.priority !== 3 || !filled.category_id) throw new Error('not filled in: ' + JSON.stringify(filled))
+  if (filled.priority !== null || !filled.category_id) throw new Error('not filled in: ' + JSON.stringify(filled))
   if (await page.locator('.needs-badge').count()) throw new Error('badge still shown after filling in')
 })
 
@@ -775,7 +768,6 @@ await scenario('Heavy offline use: 100 queued changes sync in order', async ({ p
     for (let i = 1; i <= 5; i++) {
       await page.getByLabel(`Row ${i} title`).fill(`Bulk ${batch}-${i}`)
       await page.getByLabel(`Row ${i} due date`).fill(iso(i))
-      await page.getByLabel(`Row ${i} priority`).selectOption(String(i))
       await page.getByLabel(`Row ${i} category`).selectOption({ label: 'Admin' })
     }
     await page.getByRole('button', { name: 'Save all' }).click()

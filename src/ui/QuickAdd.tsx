@@ -6,12 +6,11 @@ import type { Store } from '../data/useStore'
 import { ErrorBanner, Sheet } from './Sheet'
 
 const ROWS = 5
-const blank = (): QuickAddRow => ({ title: '', dueDate: '', priority: '', categoryId: '' })
+const blank = (): QuickAddRow => ({ title: '', dueDate: '', categoryId: '' })
 
 /**
- * Batch entry: title / due / priority / category only (priority and category
- * optional). Blank-title rows are
- * skipped; any titled row with a problem blocks the whole batch (by design).
+ * Batch entry: title / due / category only (category optional). Blank-title
+ * rows are skipped; any titled row with a problem blocks the whole batch (by design).
  * On success everything is saved in one atomic write and the form resets.
  */
 export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; store: Store; onClose: () => void; onSaved: (msg: string) => void }) {
@@ -53,14 +52,6 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
             <input type="text" placeholder={`Task ${i + 1}`} aria-label={`Row ${i + 1} title`} value={row.title} maxLength={500} onChange={(e) => set(i, { title: e.target.value })} />
             <div className="qa-fields">
               <input type="date" aria-label={`Row ${i + 1} due date`} value={row.dueDate} onChange={(e) => set(i, { dueDate: e.target.value })} />
-              <select aria-label={`Row ${i + 1} priority`} value={String(row.priority)} onChange={(e) => set(i, { priority: e.target.value === '' ? '' : Number(e.target.value) })}>
-                <option value="">No priority</option>
-                {[1, 2, 3, 4, 5].map((p) => (
-                  <option key={p} value={p}>
-                    P{p}
-                  </option>
-                ))}
-              </select>
               <select aria-label={`Row ${i + 1} category`} value={row.categoryId ?? ''} onChange={(e) => set(i, { categoryId: e.target.value })}>
                 <option value="">No category</option>
                 {data.categories.map((c) => (
