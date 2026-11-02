@@ -48,7 +48,7 @@ code only — task data lives only in Supabase and never goes in the repo.
   today..today+30. Restore removes the History entry; completing a parent
   cascades to subtasks (warn first).
 - Quick Add: title / due / category; blank rows skipped, category optional, any invalid
-  titled row (e.g. no due date) blocks the batch.
+  titled row (e.g. no due date) blocks the batch. "Apply to all" bar (Today/Tomorrow/date) fills only titled rows with no date; "+ Add row" (5 → max 20).
 - Sign-out: this device only; wipes the offline copy (warns if unsynced).
 
 ## Architecture in one breath

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, diffDays, isValidISODate, monthBounds, todayISO, weekBounds } from './dates'
 import { inDaily, inDashboardWeek, inLater, inMonthlyList, inWeekly, missingDetails, monthCounts, parentCandidates, sortForever, sortTasks, breadcrumb } from './placement'
-import { validateCategoryName, validateQuickAdd, validateTask } from './validate'
+import { applyDueToBlankTitled, validateCategoryName, validateQuickAdd, validateTask } from './validate'
 import { applyLocal, restoreDetachReason, cloneSubtree, nextOccurrenceDate, planCreate, planDelete, planFinish, planRestore, planToggleChecklist, planUpdate, subtaskProgress, type Env } from './actions'
 import { nextCategoryColor, PALETTE, safeColor } from './categories'
 import type { Category, Snapshot, Task } from './types'
@@ -334,5 +334,30 @@ describe('categories', () => {
     expect(safeColor('#5b8cff')).toBe('#5b8cff')
     expect(safeColor('red;background:url(x)')).toBe('#8b929c')
     expect(safeColor(undefined)).toBe('#8b929c')
+  })
+})
+
+describe('applyDueToBlankTitled', () => {
+  const r = (title: string, dueDate = '') => ({ title, dueDate, categoryId: null })
+  it('fills a titled row with an empty date', () => {
+    expect(applyDueToBlankTitled([r('a')], TODAY)[0].dueDate).toBe(TODAY)
+  })
+  it("leaves a titled row's existing date alone", () => {
+    expect(applyDueToBlankTitled([r('a', '2026-10-01')], TODAY)[0].dueDate).toBe('2026-10-01')
+  })
+  it('leaves blank-title rows empty', () => {
+    const out = applyDueToBlankTitled([r(''), r('   ')], TODAY)
+    expect(out.map((x) => x.dueDate)).toEqual(['', ''])
+  })
+  it('does not mutate the input', () => {
+    const rows = [r('a'), r('')]
+    const snap = JSON.parse(JSON.stringify(rows))
+    const out = applyDueToBlankTitled(rows, TODAY)
+    expect(rows).toEqual(snap)
+    expect(out[0]).not.toBe(rows[0])
+  })
+  it('returns rows unchanged for an empty date', () => {
+    const rows = [r('a')]
+    expect(applyDueToBlankTitled(rows, '')).toEqual(rows)
   })
 })

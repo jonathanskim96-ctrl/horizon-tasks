@@ -174,8 +174,13 @@ button.link { background: none; border: 0; color: var(--accent); padding: 0 4px;
 /* quick add */
 .qa-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 10px; background: var(--surface-2); }
 .qa-row.has-error { border-color: var(--overdue); }
-.qa-row input[type=text], .qa-fields input, .qa-fields select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
-.qa-fields { display: grid; grid-template-columns: minmax(0, 1.25fr) 62px minmax(0, 1fr); gap: 6px; margin-top: 6px; }
+.qa-row input[type=text], .qa-fields input, .qa-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.qa-bar-label { flex: 1 0 100%; font-size: 13px; color: var(--muted); }
+.qa-bar input[type=date] { min-width: 0; flex: 1 1 130px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 6px; font-size: 14px; }
+.qa-hint { font-size: 13px; margin-bottom: 8px; }
+.qa-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.qa-fields select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+.qa-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: 6px; }
 .qa-fields select { padding: 9px 6px; font-size: 14px; }
 .qa-fields input[type=date] { min-width: 0; font-size: 14px; padding: 9px 6px; }
 
