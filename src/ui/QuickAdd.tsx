@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { planCreateMany } from '../domain/actions'
 import type { Snapshot } from '../domain/types'
-import { validateQuickAdd, type FieldErrors, type QuickAddRow } from '../domain/validate'
+import { addDays, todayISO } from '../domain/dates'
+import { applyDueToBlankTitled, validateQuickAdd, type FieldErrors, type QuickAddRow } from '../domain/validate'
 import type { Store } from '../data/useStore'
 import { ErrorBanner, Sheet } from './Sheet'
 
 const ROWS = 5
+const MAX_ROWS = 20
 const blank = (): QuickAddRow => ({ title: '', dueDate: '', categoryId: '' })
 
 /**
@@ -18,7 +20,16 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
   const [rowErrors, setRowErrors] = useState<Record<number, FieldErrors>>({})
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [applyDate, setApplyDate] = useState(() => todayISO())
+  const [hint, setHint] = useState<string | null>(null)
   const set = (i: number, patch: Partial<QuickAddRow>) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
+
+  const applyAll = () => {
+    const next = applyDueToBlankTitled(rows, applyDate)
+    if (next.every((row, i) => row.dueDate === rows[i].dueDate)) return setHint('No titled rows without a date.')
+    setHint(null)
+    setRows(next)
+  }
 
   const save = async () => {
     setError(null)
@@ -35,6 +46,7 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
       await store.commit('quickadd', planCreateMany(r.values))
       onSaved(`Added ${r.values.length} task${r.values.length === 1 ? '' : 's'}.`)
       setRows(Array.from({ length: ROWS }, blank))
+      setHint(null)
     } catch (e) {
       setError(`Couldn't save: ${(e as Error).message}`)
     } finally {
@@ -45,6 +57,20 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
   return (
     <Sheet title="Quick add" onClose={onClose}>
       {error && <ErrorBanner message={error} />}
+      <div className="qa-bar">
+        <span className="qa-bar-label">Due date for titled rows</span>
+        <button type="button" className="btn" onClick={() => setApplyDate(todayISO())}>
+          Today
+        </button>
+        <button type="button" className="btn" onClick={() => setApplyDate(addDays(todayISO(), 1))}>
+          Tomorrow
+        </button>
+        <input type="date" aria-label="Apply due date" value={applyDate} onChange={(e) => setApplyDate(e.target.value)} />
+        <button type="button" className="btn" onClick={applyAll}>
+          Apply to all
+        </button>
+      </div>
+      {hint && <div className="muted qa-hint">{hint}</div>}
       {rows.map((row, i) => {
         const err = rowErrors[i]
         return (
@@ -65,6 +91,12 @@ export function QuickAdd({ data, store, onClose, onSaved }: { data: Snapshot; st
           </div>
         )
       })}
+      <div className="qa-add">
+        <button type="button" className="btn" onClick={() => setRows((r) => [...r, blank()])} disabled={rows.length >= MAX_ROWS}>
+          + Add row
+        </button>
+        {rows.length >= MAX_ROWS && <span className="muted">Max {MAX_ROWS} rows</span>}
+      </div>
       <div className="btn-row">
         <button className="btn" onClick={onClose} disabled={saving}>
           Close

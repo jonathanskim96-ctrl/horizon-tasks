@@ -145,6 +145,15 @@ export interface QuickAddRow {
   categoryId: string | null
 }
 
+/**
+ * Quick Add "apply date": fill only rows with a non-blank title AND an empty
+ * due date. Never overwrites a date; never dates an empty-title row. Pure.
+ */
+export function applyDueToBlankTitled(rows: QuickAddRow[], date: string): QuickAddRow[] {
+  if (!date) return rows
+  return rows.map((row) => (row.title.trim() !== '' && row.dueDate === '' ? { ...row, dueDate: date } : { ...row }))
+}
+
 export type QuickAddResult =
   | { ok: true; values: Omit<Task, 'id' | 'createdAt'>[] }
   | { ok: false; rowErrors: Record<number, FieldErrors> }
